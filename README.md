@@ -49,7 +49,7 @@ skin-cancer-images-segmentation/
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb   # Dataset analysis ✅
 │   ├── 02_preprocessing.ipynb      # Augmentation & split strategy ✅
-│   └── main.ipynb                  # Main training pipeline
+│   └── 03_classification.ipynb     # Binary classifier training & threshold selection
 ├── outputs/
 │   ├── figures/             # Plots saved by notebooks
 │   └── models/              # Saved model checkpoints (not tracked by git)
@@ -90,4 +90,4 @@ python setup_data.py
 |----------|-------------|--------|
 | `01_data_exploration` | Class distribution, sample images, pixel stats, masks, lesion coverage | Done |
 | `02_preprocessing` | Augmentation pipeline, dataset split, batch sanity check | Done |
-| `main` | Full training pipeline | In progress |
+| `03_classification` | Binary classifier training, threshold selection | In progress |

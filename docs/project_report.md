@@ -251,7 +251,7 @@ skin-cancer-images-segmentation/
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb   # Dataset analysis ✅
 │   ├── 02_preprocessing.ipynb      # Augmentation & split strategy ✅
-│   └── main.ipynb                  # Full training pipeline
+│   └── 03_classification.ipynb     # Binary classifier training & threshold selection
 ├── outputs/
 │   ├── figures/             # Plots from notebooks
 │   └── models/              # Saved checkpoints (not tracked by git)
