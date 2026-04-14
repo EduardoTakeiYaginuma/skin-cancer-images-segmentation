@@ -1,0 +1,54 @@
+{
+  "seed": 42,
+  "target_size": 224,
+  "train_ratio": 0.7,
+  "val_ratio": 0.15,
+  "test_ratio": 0.15,
+  "mask_threshold": 127,
+  "bbox_margin_ratio": 0.1,
+  "hair_kernel_size": 17,
+  "hair_threshold": 10,
+  "hair_inpaint_radius": 1,
+  "batch_size": 32,
+  "hard_negative_label": "NV",
+  "hard_negative_multiplier": 2.0,
+  "normalization_mode": "dataset",
+  "processed_dir": "/Users/eduardoyaginuma/Documents/Repositorios/insper/skin-cancer-images-segmentation/data/processed",
+  "export_baseline_name": "without_augmentation",
+  "export_augmented_name": "with_augmentation",
+  "augmented_export_copies": 2,
+  "include_original_in_augmented_train": true,
+  "export_image_format": "png",
+  "binary_class_dirs": {
+    "0": "0_non_melanoma",
+    "1": "1_melanoma"
+  },
+  "dataset_mean": [
+    0.7581730920941053,
+    0.5249014107600518,
+    0.545720235198279
+  ],
+  "dataset_std": [
+    0.13993161144223643,
+    0.16343857485972502,
+    0.18222082999645317
+  ],
+  "imagenet_mean": [
+    0.48500001430511475,
+    0.4560000002384186,
+    0.4059999883174896
+  ],
+  "imagenet_std": [
+    0.2290000021457672,
+    0.2240000069141388,
+    0.22499999403953552
+  ],
+  "train_size": 7010,
+  "val_size": 1502,
+  "test_size": 1503,
+  "train_positive_ratio": 0.11112696148359487,
+  "val_positive_ratio": 0.11118508655126498,
+  "test_positive_ratio": 0.1111111111111111,
+  "baseline_export_root": "/Users/eduardoyaginuma/Documents/Repositorios/insper/skin-cancer-images-segmentation/data/processed/without_augmentation",
+  "augmented_export_root": "/Users/eduardoyaginuma/Documents/Repositorios/insper/skin-cancer-images-segmentation/data/processed/with_augmentation"
+}

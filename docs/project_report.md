@@ -1,276 +1,181 @@
 # Binary Melanoma Screening from Dermatoscopic Images
-### Artificial Intelligence in Medicine and Healthcare — Project Report
+### Artificial Intelligence in Medicine and Healthcare
 
-**Gabriel Fernando Missaka Mendes | Eduardo Takei Yaginuma**
+**Eduardo Takei Yaginuma | Gabriel Fernando Mendes Missaka**
 
----
-
-## Table of Contents
-
-1. [Introduction](#introduction)
-2. [Project Proposal](#project-proposal)
-3. [Dataset](#dataset)
-4. [Proposed Approach](#proposed-approach)
-5. [Evaluation Metrics](#evaluation-metrics)
-6. [Expected Outcome](#expected-outcome)
-7. [Project Organization and Authors' Contributions](#project-organization-and-authors-contributions)
-8. [Development](#development)
-9. [References](#references)
-
----
+## Project Report
 
 ## Introduction
 
 ### Problem Background
 
-Cutaneous melanoma is widely recognized as the most aggressive and life-threatening form of skin cancer. Although it accounts for only approximately 1%–4% of all skin cancer cases, it is responsible for over 80% of skin cancer-related deaths (American Cancer Society, 2024; Vieira & Brandão, 2022). Its high lethality is primarily associated with its strong metastatic potential — unlike other skin cancers, melanoma can rapidly spread to distant organs once it invades deeper skin layers, particularly after the tumor transitions from the radial (superficial) growth phase to the vertical growth phase (Caraviello et al., 2025).
+Cutaneous melanoma is the most aggressive and life-threatening form of skin cancer, accounting for a small proportion of cases (approximately 1% to 4%) but responsible for over 80% of skin cancer-related deaths (American Cancer Society, 2024; Vieira and Brandao, 2022). Its high mortality is primarily associated with its strong metastatic potential, particularly after the transition from radial to vertical growth, enabling invasion into deeper skin layers and access to vascular systems (Caraviello et al., 2025).
 
-Early detection is critical for improving patient outcomes. When diagnosed at a localized stage, melanoma presents a 5-year relative survival rate above 99%. However, if the disease progresses to distant metastasis, this rate drops to approximately 35% (American Cancer Society, 2024). This sharp contrast highlights the importance of timely and accurate diagnosis.
+Early detection is critical for improving patient outcomes. When diagnosed at a localized stage, melanoma presents a 5-year survival rate above 99%, which drops to approximately 35% in cases of distant metastasis (American Cancer Society, 2024). However, accurate diagnosis remains challenging even for experienced dermatologists due to the visual similarity between malignant and benign lesions.
 
-In clinical practice, accurate diagnosis remains challenging even for experienced dermatologists due to the visual similarity between malignant and benign lesions. Computational tools based on artificial intelligence can support clinical decision-making, particularly by reducing false negatives — the most critical diagnostic error in melanoma screening.
-
----
+In this context, computational tools based on artificial intelligence can support clinical decision-making, particularly by reducing false negatives, which represent the most critical diagnostic error in melanoma screening.
 
 ## Project Proposal
 
 This project proposes the development of a deep learning-based system for binary classification of dermatoscopic images, distinguishing melanoma from non-melanoma lesions.
 
-Rather than addressing a multi-class classification problem, the task is reformulated into a binary setting: all non-melanoma categories (basal cell carcinoma, actinic keratosis, benign keratosis, dermatofibroma, vascular lesions, and melanocytic nevi) are grouped into a single class. This approach aligns with clinical priorities, focusing specifically on detecting melanoma due to its high lethality.
+Instead of addressing a multi-class classification problem, the task is reformulated into a binary setting, grouping all non-melanoma categories (e.g., basal cell carcinoma, benign keratosis, nevi) into a single class. This approach aligns with clinical priorities, focusing specifically on detecting melanoma due to its high lethality.
 
-Special emphasis will be placed on challenging negative samples — lesions that visually resemble melanoma — to improve model robustness and reduce false negatives. In particular, melanocytic nevi (NV), which constitute approximately 67% of the dataset and are visually very similar to melanoma, represent the primary hard negatives.
+Special emphasis will be placed on challenging negative samples, lesions that visually resemble melanoma to improve model robustness and reduce false negatives.
+
+The system will be trained and evaluated using the HAM10000 dataset, with labels adapted to a binary setting. Given the clinical objective, sensitivity (recall) will be prioritized as the primary evaluation metric, ensuring that melanoma cases are correctly identified.
 
 To align model predictions with clinical use, the classification threshold will be selected based on maximizing sensitivity while maintaining a minimum acceptable level of specificity, ensuring a balance between early detection and false positive control.
 
-**Impact:** The tool would work as a pre-screening step during routine skin exams. After capturing a dermatoscopic image, the system would instantly flag suspicious lesions, helping the dermatologist decide whether to proceed with a biopsy. It could function as a plugin within existing image capture software, adding a real-time alert without disrupting the examination flow.
-
----
+Secondary metrics such as specificity and AUC-ROC will be used to provide a comprehensive evaluation of model performance.
 
 ## Dataset
 
-The dataset used in this project is the **HAM10000 (Human Against Machine with 10,000 training images)** dataset, available on Kaggle:
+The HAM10000 dataset contains 10,015 dermatoscopic images of pigmented skin lesions categorized into seven diagnostic classes. For this project, the dataset is reformulated into a binary classification task: melanoma (positive class) versus non-melanoma (negative class).
 
-> Tschandl, P., Rosendahl, C., & Kittler, H. (2018). *The HAM10000 dataset: A large collection of multi-source dermatoscopic images of common pigmented skin lesions*. Scientific Data.  
-> Original source: Harvard Dataverse (doi:10.7910/DVN/DBW86T)
+A key characteristic of the dataset is its class imbalance, with melanoma cases representing a minority. This reflects real-world clinical distributions and must be addressed during training.
 
-### Overview
+The dataset also includes metadata such as age, sex, and anatomical site, which may be used for further analysis or bias assessment.
 
-| Attribute | Value |
-|-----------|-------|
-| Total images | 10,015 |
-| Number of original classes | 7 |
-| Binary classes | Melanoma (1) vs. Non-Melanoma (0) |
-| Image format | JPG |
-| Image resolution | 600×450 px (uniform) |
-| Masks available | Yes (PNG segmentation masks) |
-| Dataset size | ~2.77 GB |
-| License | CC BY-NC-SA 4.0 |
+Additionally, a segmentation variant of the dataset provides lesion masks. In this project, segmentation will be treated as an optional preprocessing step, used to isolate the region of interest and reduce background noise. It is not treated as a separate modeling task.
 
-### Class Distribution
+## Implementation and Deployment
 
-| Class | Abbreviation | Binary Label | Count | % |
-|-------|-------------|--------------|-------|---|
-| Melanocytic Nevi | NV | Non-Melanoma | 6,705 | 66.9% |
-| Melanoma | MEL | Melanoma | 1,113 | 11.1% |
-| Benign Keratosis | BKL | Non-Melanoma | 1,099 | 11.0% |
-| Basal Cell Carcinoma | BCC | Non-Melanoma | 514 | 5.1% |
-| Actinic Keratosis | AKIEC | Non-Melanoma | 327 | 3.3% |
-| Vascular Lesions | VASC | Non-Melanoma | 142 | 1.4% |
-| Dermatofibroma | DF | Non-Melanoma | 115 | 1.1% |
-| **Total** | | | **10,015** | **100%** |
+The implementation prioritizes reproducibility, clarity, and modularity.
 
-**Class imbalance:** ~8:1 (non-melanoma : melanoma). This is severe and directly impacts the choice of loss function and evaluation metrics.
+### Data Analysis and Preprocessing
 
-### Ground Truth Reliability
+An exploratory data analysis (EDA) will be conducted to assess class distribution, metadata patterns, and potential biases. Preprocessing steps include resizing, normalization, artifact removal, and data augmentation techniques such as rotation and flipping.
 
-More than 50% of the lesions are confirmed through histopathological examination (gold standard for skin cancer diagnosis). The remaining cases are validated through follow-up examinations, expert consensus, or in vivo confocal microscopy.
+If segmentation masks are used, they will be applied during preprocessing to focus the model on lesion regions, improving feature extraction without introducing a separate segmentation model.
 
-### Segmentation Masks
+### Development
 
-The dataset provides lesion segmentation masks for all images. These masks can be used as an optional preprocessing step to isolate the lesion region and reduce background noise, potentially improving feature extraction without introducing a separate segmentation model.
+The codebase will be version-controlled using GitHub to ensure reproducibility and experiment tracking.
 
----
+### Deployment Considerations
 
-## Proposed Approach
+The integration of the model into a web application (e.g., using Flask or Streamlit) is considered a future step, intended to demonstrate real-world applicability. Similarly, features such as real-time image capture via camera will be treated as possible extensions, rather than core deliverables of this project.
 
-### Architecture
+## Modeling
 
-Transfer learning will be applied using pre-trained architectures:
+The modeling stage focuses on developing a robust deep learning approach for binary classification of dermatoscopic images (melanoma vs non-melanoma). Based on an initial review of existing implementations and Kaggle benchmarks, particular emphasis will be placed on architectures incorporating U-Net, which demonstrated strong performance in related tasks. In this project, U-Net will be primarily explored as a segmentation-based preprocessing strategy, allowing the model to focus on lesion regions before classification.
 
-- **ResNet-50** — strong baseline with residual connections
-- **EfficientNet** — more parameter-efficient alternative
+In addition to this approach, transfer learning will be applied using pre-trained convolutional neural networks such as ResNet50 and EfficientNet, which will serve as baseline and comparative models. These architectures are widely adopted in medical image classification due to their ability to capture hierarchical visual features.
 
-The final layer will be adapted to output a single probability score using a sigmoid activation function for binary classification.
+For classification, the final layers of these networks will be adapted to output a single probability score using a sigmoid activation function. The training process will follow a two-stage strategy: initial training with frozen convolutional layers to preserve general features, followed by fine-tuning of deeper layers to learn domain-specific patterns present in dermatoscopic images.
 
-### Training Strategy
+To address class imbalance, techniques such as class weighting or focal loss will be employed, ensuring greater emphasis on melanoma cases during training. Data augmentation strategies and regularization methods, including dropout and early stopping, will be used to improve generalization and reduce overfitting.
 
-Training follows a two-stage approach:
-1. **Initial training** with frozen convolutional layers — only the classification head is trained
-2. **Fine-tuning** of deeper layers to capture domain-specific dermatoscopic features
+If segmentation is applied, it will be incorporated strictly as a preprocessing step, ensuring that the overall pipeline remains a classification task rather than a separate segmentation problem.
 
-### Handling Class Imbalance
+## Evaluation Strategy
 
-Given the severe 8:1 imbalance, the following strategies will be employed:
-- Class weighting in the loss function
-- Focal loss (to emphasize hard negatives)
-- Targeted data augmentation for the minority class
+Model performance will be evaluated with a strong emphasis on sensitivity (recall), aiming to minimize false negatives due to their clinical impact. The classification threshold will not be fixed at 0.5; instead, it will be selected based on validation data, prioritizing high sensitivity while maintaining a minimum acceptable level of specificity.
 
-### Preprocessing Pipeline
+To ensure a reliable and unbiased evaluation, the dataset will be split into training, validation, and test sets, with a portion of the images held out exclusively for final testing. This test set will not be used during model training or hyperparameter tuning, allowing for a fair assessment of the model's generalization performance.
 
-- Resize to 224×224 px
-- Normalize with ImageNet mean and std
-- Optional: apply segmentation masks to isolate lesion regions
-
-### Data Augmentation (training only)
-
-- Random horizontal and vertical flip
-- Random rotation
-- Color jitter (brightness, contrast, saturation)
-- Random resized crop
-
-### Threshold Selection
-
-The decision threshold will not be fixed at 0.5. Instead, it will be selected on the validation set to maximize sensitivity while maintaining a minimum acceptable specificity — aligned with the clinical priority of avoiding missed diagnoses.
-
----
-
-## Evaluation Metrics
-
-Given the clinical implications of missed diagnoses, evaluation goes beyond simple accuracy:
-
-| Metric | Role | Description |
-|--------|------|-------------|
-| **Sensitivity (Recall)** | Primary | Fraction of melanoma cases correctly identified — minimizes false negatives |
-| **Specificity** | Secondary | Fraction of non-melanoma cases correctly identified |
-| **AUC-ROC** | Overall | Model performance across all classification thresholds |
-
-Accuracy alone is not a sufficient metric due to the severe class imbalance — a model that always predicts "non-melanoma" would achieve ~89% accuracy while being clinically useless.
-
----
-
-## Expected Outcome
-
-A decision-support tool capable of assisting dermatologists during routine examinations. By analyzing dermatoscopic images, the system can highlight suspicious lesions and support decisions regarding further diagnostic procedures, such as biopsy. The solution is designed to be lightweight and easily integrable into existing clinical workflows.
-
-Optional future extension: integration into a web application (Flask or Streamlit) allowing real-time image upload and classification.
-
----
+Additionally, AUC-ROC will be used to assess performance across different thresholds, and model calibration may be considered to improve the reliability of predicted probabilities.
 
 ## Project Organization and Authors' Contributions
 
-The project is organized into five development sprints to ensure a structured and iterative workflow.
+The project is organized into five development sprints to ensure a structured and iterative workflow, while also reflecting a clear division of responsibilities between the authors.
 
-### Sprint 1 — Data Exploration
-- Literature review on melanoma detection and clinical context
-- Repository setup and project structure organization
-- Dataset acquisition and organization
+### Sprint 1 - Data Exploration
+
 - Exploratory Data Analysis (EDA)
-- Analysis of class distribution and binary imbalance
-- Inspection of image dimensions and pixel statistics
-- Exploration of segmentation masks and lesion coverage
-- Image quality check
+- Analysis of class distribution and imbalance
+- Inspection of image quality and resolution
+- Exploration of metadata (age, sex, anatomical site)
+- Identification of potential biases and data issues
 
-### Sprint 2 — Feature Engineering and Preprocessing
+### Sprint 2 - Feature Engineering and Preprocessing
+
 - Image resizing and normalization
-- Data augmentation pipeline (rotation, flipping, color jitter)
-- Optional segmentation mask application
-- Train/validation/test split strategy and CSV generation
-- Batch sanity check and sample weight computation
+- Data augmentation (rotation, flipping, color transformations)
+- Artifact and noise reduction (e.g., hair removal)
+- Optional application of segmentation masks as a preprocessing step
+- Dataset splitting (train, validation, test)
 
-### Sprint 3 — Modeling
-- Selection of baseline architecture (ResNet-50 or EfficientNet)
+### Sprint 3 - Modeling
+
+- Selection of baseline architecture (e.g., ResNet50, EfficientNet)
 - Implementation of transfer learning
-- Training with frozen layers followed by fine-tuning
+- Training with frozen layers and fine-tuning
 - Handling class imbalance (class weights or focal loss)
 - Initial model training and baseline performance assessment
 
-### Sprint 4 — Validation and Optimization
+### Sprint 4 - Validation and Optimization
+
 - Hyperparameter tuning
 - Threshold selection prioritizing sensitivity with minimum specificity
-- Performance evaluation (Recall, Specificity, AUC-ROC)
+- Performance evaluation using validation set (Recall, Specificity, AUC-ROC)
 - Error analysis and model refinement
 - Regularization strategies (dropout, early stopping)
 
-### Sprint 5 — Testing and Finalization
-- Final evaluation on held-out test set
+### Sprint 5 - Testing and Finalization
+
+- Final evaluation on a held-out test set
 - Analysis of generalization performance
-- Documentation and preparation of final report
-- Optional deployment as a web application
+- Model calibration (if applicable)
+- Documentation and preparation of the final report
+- Optional deployment as a web application (future work)
 
-### Authors' Contributions
+The project tasks were divided to ensure both specialization and collaboration across all stages of development. Gabriel Fernando Mendes Missaka led the data exploration and feature engineering phases, including exploratory data analysis, dataset preprocessing, and the design of data augmentation strategies. Eduardo Takei Yaginuma was primarily responsible for the modeling, validation, and testing stages, including the implementation of deep learning architectures, training procedures, and performance evaluation.
 
-**Gabriel Fernando Missaka Mendes** led the data exploration and feature engineering phases, including repository setup, project structure organization, exploratory data analysis, dataset preprocessing, and the design of data augmentation strategies.
-
-**Eduardo Takei Yaginuma** is primarily responsible for the modeling, validation, and testing stages, including the implementation of deep learning architectures, training procedures, and performance evaluation.
-
-Both authors collaborated across all stages of the project, contributing to decision-making, experimental design, and iterative improvements to the pipeline.
-
----
+Both authors collaborated across all stages of the project, contributing to decision-making, experimental design, and iterative improvements to the data pipeline and model performance.
 
 ## Development
 
-### Sprint 1 — Data Exploration
+### Sprint 1 - Data Exploration
 
-The first sprint focused on problem contextualization, repository setup, dataset acquisition, and initial exploratory data analysis.
+The first sprint focused on problem contextualization, dataset acquisition, and initial exploratory data analysis. Initially, a literature review was conducted to better understand the clinical relevance of melanoma detection, its diagnostic challenges, and the role of artificial intelligence in supporting early diagnosis. This step was essential to properly frame the problem and justify the choice of a binary classification approach centered on melanoma detection.
 
-A literature review was conducted to understand the clinical relevance of melanoma detection, its diagnostic challenges, and the role of artificial intelligence in supporting early diagnosis. This step was essential to properly frame the problem and justify the choice of a binary classification approach centered on melanoma detection.
+From a technical perspective, the project repository was created to ensure proper version control and reproducibility. The HAM10000 dataset was then obtained from Kaggle and organized for analysis. An initial data exploration phase was conducted to better understand the dataset's structure, class distribution, and visual characteristics.
 
-From a technical perspective, the project repository was created and structured with clear folder organization. The HAM10000 dataset was obtained from Kaggle and organized for analysis.
+The HAM10000 dataset contains 10,015 dermatoscopic images categorized into seven diagnostic classes, which were reformulated into a binary classification problem (melanoma vs non-melanoma) to align with clinical priorities. A key finding from the analysis is the severe class imbalance: melanoma represents only 11.1% of the dataset (1,113 images), while non-melanoma accounts for 88.9% (8,902 images), resulting in an approximate ratio of 8:1. This imbalance has significant implications for modeling, as it can bias the model toward the majority class. Therefore, accuracy alone is not a sufficient metric, and greater emphasis must be placed on sensitivity, recall, and AUC. Additionally, techniques such as class weighting, focal loss, and targeted data augmentation will be necessary to ensure adequate performance in detecting melanoma cases.
 
-The HAM10000 dataset contains 10,015 dermatoscopic images categorized into seven diagnostic classes, reformulated into a binary problem (melanoma vs. non-melanoma). A key finding is the **severe class imbalance**: melanoma represents only 11.1% of the dataset (1,113 images) while non-melanoma accounts for 88.9% (8,902 images), resulting in an approximate ratio of 8:1. This imbalance has significant implications for modeling — accuracy alone is insufficient, and techniques such as class weighting, focal loss, and targeted augmentation will be necessary.
+Within the non-melanoma group, melanocytic nevi (NV) dominate, representing approximately 67% of the total dataset. This class is particularly important because it constitutes the main set of hard negatives, as nevi can be visually very similar to melanomas. This observation highlights the need for models capable of capturing subtle visual patterns such as irregular borders, texture variations, and pigment distribution, rather than relying on coarse differences between classes.
 
-Within the non-melanoma group, melanocytic nevi (NV) dominate at approximately 67% of the total dataset. This class constitutes the primary set of hard negatives, as nevi can be visually very similar to melanoma, requiring the model to capture subtle visual patterns such as irregular borders, texture variations, and pigment distribution.
+Qualitative inspection of the images revealed high intra-class variability, including differences in color, texture, lesion shape, and the presence of artifacts such as hair, reflections, and uneven illumination. While this variability increases the complexity of the task, it also makes the dataset more representative of real-world conditions, which is beneficial for model generalization.
 
-Qualitative inspection revealed high intra-class variability including differences in color, texture, lesion shape, and the presence of artifacts such as hair, reflections, and uneven illumination. All images share a standardized resolution of 600×450 pixels, simplifying preprocessing decisions.
+Another relevant finding is that all images share a standardized resolution of 600x450 pixels, simplifying preprocessing decisions and allowing resizing to be treated as a design choice rather than a requirement. Analysis of pixel intensity distributions (mean and standard deviation in RGB channels) showed that melanoma and non-melanoma images have similar global color statistics, indicating that the classification task cannot rely on simple color or brightness differences, but instead requires learning more complex morphological and textural features.
 
-Pixel intensity distribution analysis showed that melanoma and non-melanoma images have similar global color statistics, indicating that the classification task requires learning complex morphological and textural features rather than simple color or brightness differences.
+The dataset also provides segmentation masks for lesion regions, which represent a valuable additional resource. These masks can be used as an optional preprocessing step to isolate the lesion area and reduce background noise, potentially improving model performance without introducing a separate segmentation model.
 
-Segmentation masks were inspected and confirmed to be present for all images. These masks provide precise lesion localization and will be incorporated as an optional preprocessing step to reduce background noise.
+All activities in this sprint were conducted collaboratively through online meetings and in-person discussions, ensuring continuous alignment between both authors. While both contributors participated in all stages of the sprint, Gabriel Fernando Mendes Missaka focused more on literature research and project organization, including structuring the repository and documentation. Eduardo Takei Yaginuma contributed primarily to environment setup and led the initial data exploration and analysis process.
 
-All activities in this sprint were conducted collaboratively. Gabriel Fernando Missaka Mendes focused on literature research, repository setup, and documentation. Eduardo Takei Yaginuma led the data exploration and analysis process.
+Overall, the data exploration phase indicates that the dataset is realistic and challenging, with significant class imbalance, high visual variability, and subtle inter-class differences. These findings directly inform the modeling strategy, emphasizing the need for robust architectures, appropriate handling of class imbalance, careful preprocessing, and evaluation metrics aligned with clinical priorities.
 
-### Sprint 2 — Feature Engineering and Preprocessing
+### Sprint 2 - Feature Engineering and Preprocessing
 
-The second sprint focused on defining the preprocessing pipeline, data augmentation strategy, and dataset splits.
+The second sprint focused on transforming the raw HAM10000 segmentation dataset into a reproducible and training-ready pipeline. This stage was implemented in a dedicated preprocessing notebook, designed not only to prepare the data for modeling, but also to export finalized datasets to disk so that the training stage could be executed later without repeating the entire preprocessing workflow.
 
-The preprocessing pipeline was defined as: resize to 224×224, normalize with ImageNet statistics (`mean=[0.485, 0.456, 0.406]`, `std=[0.229, 0.224, 0.225]`), with optional segmentation mask application to isolate lesion regions.
+The first step consisted of validating dataset integrity. The metadata file was loaded and converted into the binary target adopted in the project, with melanoma (MEL) defined as the positive class and all remaining diagnostic categories grouped as non-melanoma. In addition to the binary label, the original seven-class annotation was preserved in the metadata so that specific subclasses, especially melanocytic nevi (NV), could still be tracked during analysis and sampling. At this stage, several consistency checks were performed to ensure that every metadata row had a corresponding image and segmentation mask, that no duplicated image identifiers were present, and that the spatial dimensions of the raw images and masks were uniform across the dataset.
 
-The augmentation strategy for training includes random horizontal and vertical flips, random rotation, color jitter, and random resized cropping — chosen to increase diversity while preserving clinically relevant visual features.
+Although the exploratory analysis had already shown that the original images shared a common resolution of 600 x 450 pixels, a deterministic preprocessing pipeline was still required to standardize the final model input. For each sample, the RGB image and binary lesion mask were loaded, thin dark hair artifacts were attenuated through a classical black-hat morphological operation followed by inpainting, and the lesion region was localized using the segmentation mask. A lesion-centered crop with a safety margin was then applied, followed by padding to a square canvas and resizing to a fixed 224 x 224 resolution. This strategy ensured that all samples presented the same spatial dimensions to the model while preserving the lesion as the visual center of the image, instead of relying on a naive global resize of the full dermatoscopic frame.
 
-The dataset was split into train (70%), validation (15%), and test (15%) sets with stratification to maintain the class imbalance ratio across all splits. Sample weights were computed for the training set to address the 8:1 imbalance. A batch sanity check was performed to confirm correct label distribution and image normalization.
+The segmentation masks also played an important role beyond simple cropping. They were used to quantify lesion coverage and bounding-box proportions, allowing the preprocessing notebook to characterize the effective region of interest across classes. These statistics helped confirm that the lesion occupies very different fractions of the image depending on the diagnosis, reinforcing the usefulness of a lesion-aware preprocessing stage to reduce irrelevant background information before training.
 
----
+To guarantee reproducibility, the dataset was split into training, validation, and test subsets using a stratified 70% / 15% / 15% partition based on the binary label. This preserved the melanoma prevalence across all subsets and avoided contamination between splits. The same fixed partition is then used throughout the preprocessing and export stages, ensuring that all later experiments compare models on identical train/validation/test membership without rerunning the split logic manually.
 
-## Project Structure
+Another important step in Sprint 2 was the computation of normalization statistics using only the training split after preprocessing. Channel-wise means and standard deviations were estimated from the processed training images and saved as reusable artifacts. This choice prevents data leakage from validation or test images into preprocessing parameters and keeps the normalization fully aligned with the actual visual distribution seen during training.
 
-```
-skin-cancer-images-segmentation/
-├── data/
-│   ├── images/              # Dataset images (not tracked by git)
-│   ├── masks/               # Segmentation masks (not tracked by git)
-│   └── metadata/            # Train/val/test split CSVs
-├── notebooks/
-│   ├── 01_data_exploration.ipynb   # Dataset analysis ✅
-│   ├── 02_preprocessing.ipynb      # Augmentation & split strategy ✅
-│   └── main.ipynb                  # Full training pipeline
-├── outputs/
-│   ├── figures/             # Plots from notebooks
-│   └── models/              # Saved checkpoints (not tracked by git)
-├── src/                     # Reusable Python modules
-├── docs/                    # Project documents
-├── setup_data.py            # Automated dataset download
-├── requirements.txt         # Pinned dependencies
-├── .gitignore
-└── README.md
-```
+Since the dataset is strongly imbalanced, the preprocessing stage also introduced a weighted sampling strategy. Melanoma samples received higher sampling weight to compensate for their lower frequency, while NV samples received an additional boost because they represent the most relevant hard negatives in the binary setting. This decision reflects the clinical objective of the project: maximize melanoma detection while ensuring that the model also learns to distinguish melanoma from lesions that are visually similar.
 
----
+Data augmentation was implemented as a controlled experimental branch rather than being mixed indiscriminately into the full pipeline. Two parallel training-ready dataset configurations were prepared. The first, a baseline version, applies only deterministic preprocessing and normalization. The second applies the same deterministic preprocessing but adds stochastic augmentation to the training set, including flips, 90-degree rotations, mild affine transformations, small color and contrast perturbations, and light blur. Validation and test sets were intentionally kept deterministic in both cases so that performance comparisons would remain fair and clinically meaningful. In other words, augmentation was treated as a factor to be tested, not as an irreversible preprocessing requirement.
+
+To support direct reuse in the modeling stage, the preprocessing workflow was also extended to export the processed data to disk as folder-based datasets. Two roots were generated: one without augmentation and another with augmentation. In the baseline branch, the data are stored in train, validation, and test folders separated into binary class subfolders. In the augmented branch, the training directory is exported as train_aug and contains the original preprocessed training images together with additional augmented variants, while validation and test are exported as deterministic copies under val_aug and test_aug to preserve a consistent directory structure without introducing stochastic evaluation. This design allows the next modeling stages to start directly from ready-to-train image folders, for example through directory-based loaders such as ImageFolder, without having to rerun lesion cropping, artifact removal, resizing, or export logic.
+
+Overall, Sprint 2 established a complete and reproducible preprocessing pipeline aligned with both the technical and clinical goals of the project. The final result was not only a cleaned and standardized dataset, but also a controlled experimental setup that enables direct comparison between training with and without augmentation, while preserving consistent validation and test conditions.
+
 
 ## References
 
-AMERICAN CANCER SOCIETY. *Cancer Facts & Figures 2024*. Atlanta: American Cancer Society, 2024.
+AMERICAN CANCER SOCIETY. Cancer Facts and Figures 2024. Atlanta: American Cancer Society, 2024.
 
-CARAVIELLO, Camila et al. Melanoma Skin Cancer: A Comprehensive Review of Current Knowledge. *Cancers*, Basel, v. 17, n. 2920, p. 1–35, 2025.
+CARAVIELLO, Camila et al. Melanoma Skin Cancer: A Comprehensive Review of Current Knowledge. Cancers, Basel, v. 17, n. 2920, p. 1-35, 2025.
 
-TSCHANDL, P.; ROSENDAHL, C.; KITTLER, H. The HAM10000 dataset: A large collection of multi-source dermatoscopic images of common pigmented skin lesions. *Scientific Data*, 2018. doi:10.7910/DVN/DBW86T
+VIEIRA, Larissa Silva Fontaine; BRANDAO, Byron Jose Figueiredo. Diagnosis and prevention of melanoma: a systematic review. BWS Journal, v. 5, e220900160, p. 1-10, Sept. 2022.
 
-VIEIRA, Larissa Silva Fontaine; BRANDÃO, Byron José Figueiredo. Diagnosis and prevention of melanoma: a systematic review. *BWS Journal*, v. 5, e220900160, p. 1–10, Sept. 2022.
+https://www.kaggle.com/datasets/volodymyrpivoshenko/skin-cancer-lesions-segmentation/code
