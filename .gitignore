@@ -1,8 +1,10 @@
+archive/
 data/
+outputs/
+notebooks/outputs/
 venv/
 .venv/
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
-outputs/models/
 .DS_Store

@@ -3,91 +3,104 @@
 **Authors:** Gabriel Fernando Missaka Mendes | Eduardo Takei Yaginuma  
 **Course:** Artificial Intelligence in Medicine and Healthcare
 
----
-
 ## Project Overview
 
-A deep learning-based system for binary classification of dermatoscopic images, distinguishing melanoma from non-melanoma lesions.
+Binary classification of dermatoscopic images: melanoma (`1`) versus non-melanoma (`0`).
 
-Rather than multi-class classification, the task is reformulated as binary — all non-melanoma categories are grouped into a single class. The model focuses on learning discriminative features that separate melanoma from visually similar lesions (hard negatives), minimizing false negatives given their life-threatening consequences.
+The project now uses the local ISIC 2020 training dataset stored under `data/`. The pipeline is organized around:
 
-**Primary metric:** Sensitivity (Recall) — missing a melanoma can be fatal.  
-**Secondary metrics:** Specificity, AUC-ROC.
+- raw image exploration from `data/train/`
+- metadata exploration from `data/ISIC_2020_Training_GroundTruth.csv`
+- patient-aware splitting to reduce leakage
+- deterministic image preprocessing without segmentation masks
+- optional training-time or offline augmentation after preprocessing
 
 ## Dataset
 
-**HAM10000 (Human Against Machine with 10,000 training images)** — [Kaggle](https://www.kaggle.com/datasets/farjanakabirsamanta/skin-cancer-dataset)
+Expected local layout:
 
-- 10,015 dermatoscopic images across 7 diagnostic classes
-- Binary label: melanoma (1) vs. non-melanoma (0)
-- >50% of lesions confirmed via histopathology
-- Size: ~2.77 GB | Source: Harvard Dataverse | License: CC BY-NC-SA 4.0
+```text
+data/
+├── ISIC_2020_Training_GroundTruth.csv
+├── train/
+└── processed/
+```
 
-### Classes
+Current local dataset statistics:
 
-| Class | Label | Count |
-|-------|-------|-------|
-| Melanocytic Nevi (NV) | Non-Melanoma | 6,705 |
-| Melanoma (MEL) | Melanoma | 1,113 |
-| Benign Keratosis (BKL) | Non-Melanoma | 1,099 |
-| Basal Cell Carcinoma (BCC) | Non-Melanoma | 514 |
-| Actinic Keratosis (AKIEC) | Non-Melanoma | 327 |
-| Vascular Lesions (VASC) | Non-Melanoma | 142 |
-| Dermatofibroma (DF) | Non-Melanoma | 115 |
-| **Total** | | **10,015** |
+- `33,126` images
+- `2,056` unique patients
+- `584` melanoma images
+- `32,542` non-melanoma images
 
-**Class imbalance:** ~8:1 (non-melanoma : melanoma)
+Important consequence of this dataset version:
+
+- `patient_id` repeats heavily across the dataset
+- many patients have multiple images
+- some patients contain both positive and negative samples
+- image-level random split is therefore unsafe and can leak patient information
+
+## Preprocessing Policy
+
+The notebooks now assume:
+
+- the raw source of truth is `data/`
+- all melanoma samples are kept inside each raw split
+- only the training split is downsampled on the non-melanoma side
+- negative downsampling preserves diagnosis mix as much as possible
+- validation and test remain closer to the original raw distribution
+
+The default training ratio in the notebook generators is `6.0` non-melanoma samples for each melanoma sample. This remains configurable in the generator scripts.
 
 ## Project Structure
 
-```
+```text
 skin-cancer-images-segmentation/
 ├── data/
-│   ├── images/              # Dataset images (not tracked by git)
-│   ├── masks/               # Segmentation masks (not tracked by git)
-│   └── metadata/            # Train/val/test split CSVs
+│   ├── ISIC_2020_Training_GroundTruth.csv
+│   ├── train/
+│   └── processed/           # Exported train/val/test folders and manifests
+├── docs/
 ├── notebooks/
-│   ├── 01_data_exploration.ipynb   # Dataset analysis ✅
-│   ├── 02_preprocessing.ipynb      # Augmentation & split strategy ✅
-│   └── main.ipynb                  # Main training pipeline
+│   ├── 01_data_exploration.ipynb
+│   ├── 02_preprocessing.ipynb
+│   └── outputs/             # Notebook-generated figures/configs
 ├── outputs/
-│   ├── figures/             # Plots saved by notebooks
-│   └── models/              # Saved model checkpoints (not tracked by git)
-├── src/                     # Reusable Python modules
-├── docs/                    # Project documents (proposal, report)
-├── setup_data.py            # Downloads and organises the dataset automatically
-├── requirements.txt         # Pinned dependencies
-├── .gitignore
+│   └── figures/             # EDA figures
+├── tools/
+│   ├── generate_exploration_notebook.py
+│   └── generate_preprocessing_notebook.py
+├── setup_data.py
 └── README.md
 ```
 
 ## Setup
 
-**1. Install dependencies**
-
-Option A — from requirements file (recommended):
-```bash
-pip install -r requirements.txt
-```
-
-Option B — core packages manually:
-```bash
-pip install torch torchvision pillow pandas numpy matplotlib seaborn scikit-learn
-```
-
-**2. Download the dataset**
+Validate the local dataset:
 
 ```bash
-pip install kagglehub   # if not already installed
-python setup_data.py
+python3 setup_data.py
 ```
 
-> Requires Kaggle credentials configured (`~/.kaggle/kaggle.json`). See [Kaggle API docs](https://www.kaggle.com/docs/api) for setup instructions.
+Regenerate the notebooks from the tracked generators:
+
+```bash
+python3 tools/generate_exploration_notebook.py
+python3 tools/generate_preprocessing_notebook.py
+```
 
 ## Notebooks
 
-| Notebook | Description | Status |
-|----------|-------------|--------|
-| `01_data_exploration` | Class distribution, sample images, pixel stats, masks, lesion coverage | Done |
-| `02_preprocessing` | Augmentation pipeline, dataset split, batch sanity check | Done |
-| `main` | Full training pipeline | In progress |
+| Notebook | Purpose |
+|----------|---------|
+| `01_data_exploration.ipynb` | Dataset integrity, imbalance analysis, metadata profiling, patient analysis, image inspection |
+| `02_preprocessing.ipynb` | Patient-aware split, train balancing, deterministic preprocessing, export, manifests, loaders |
+
+## Pipeline Outputs
+
+The preprocessing notebook exports:
+
+- `data/processed/without_augmentation/`
+- `data/processed/with_augmentation/`
+- split manifests for each experiment
+- normalization stats and preprocessing config under `notebooks/outputs/preprocessing/`
