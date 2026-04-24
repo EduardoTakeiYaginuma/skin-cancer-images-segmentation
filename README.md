@@ -7,13 +7,19 @@
 
 Binary classification of dermatoscopic images: melanoma (`1`) versus non-melanoma (`0`).
 
-The project now uses the local ISIC 2020 training dataset stored under `data/`. The pipeline is organized around:
+The project currently uses the dataset stored locally under `data/`, with:
 
-- raw image exploration from `data/train/`
-- metadata exploration from `data/ISIC_2020_Training_GroundTruth.csv`
-- patient-aware splitting to reduce leakage
-- deterministic image preprocessing without segmentation masks
-- optional training-time or offline augmentation after preprocessing
+- `data/metadata.csv`
+- `data/images/`
+- `data/masks/`
+
+The workflow is organized around:
+
+- exploratory analysis of the original 7 classes
+- conversion to a binary melanoma vs non-melanoma task
+- lesion-centric preprocessing guided by segmentation masks
+- comparison between baseline training and training with augmentation
+- downstream classification experiments
 
 ## Dataset
 
@@ -21,55 +27,59 @@ Expected local layout:
 
 ```text
 data/
-├── ISIC_2020_Training_GroundTruth.csv
-├── train/
+├── metadata.csv
+├── images/
+├── masks/
+├── metadata/
+│   ├── train_split.csv
+│   ├── val_split.csv
+│   └── test_split.csv
 └── processed/
 ```
 
-Current local dataset statistics:
+Current dataset statistics:
 
-- `33,126` images
-- `2,056` unique patients
-- `584` melanoma images
-- `32,542` non-melanoma images
-
-Important consequence of this dataset version:
-
-- `patient_id` repeats heavily across the dataset
-- many patients have multiple images
-- some patients contain both positive and negative samples
-- image-level random split is therefore unsafe and can leak patient information
+- `10,015` images
+- `1,113` melanoma images
+- `8,902` non-melanoma images
+- original 7-class annotation preserved in the metadata
+- masks available for lesion-aware preprocessing
 
 ## Preprocessing Policy
 
-The notebooks now assume:
+The current notebooks assume:
 
 - the raw source of truth is `data/`
-- all melanoma samples are kept inside each raw split
-- only the training split is downsampled on the non-melanoma side
-- negative downsampling preserves diagnosis mix as much as possible
-- validation and test remain closer to the original raw distribution
+- all melanoma images are kept
+- only non-melanoma images are downsampled when building the effective dataset
+- the negative subclass mix is preserved as much as possible
+- lesion masks are used to support lesion-centric cropping
+- augmentation is evaluated as a separate experimental branch
 
-The default training ratio in the notebook generators is `6.0` non-melanoma samples for each melanoma sample. This remains configurable in the generator scripts.
+The default effective ratio in preprocessing is `3.0` non-melanoma images for each melanoma image.
 
 ## Project Structure
 
 ```text
 skin-cancer-images-segmentation/
 ├── data/
-│   ├── ISIC_2020_Training_GroundTruth.csv
-│   ├── train/
-│   └── processed/           # Exported train/val/test folders and manifests
+│   ├── metadata.csv
+│   ├── images/
+│   ├── masks/
+│   ├── metadata/              # Saved train/val/test split CSVs
+│   └── processed/             # Exported train/val/test folders and manifests
 ├── docs/
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_preprocessing.ipynb
-│   └── outputs/             # Notebook-generated figures/configs
+│   ├── 03_classification.ipynb
+│   └── outputs/
 ├── outputs/
-│   └── figures/             # EDA figures
+│   └── figures/
 ├── tools/
 │   ├── generate_exploration_notebook.py
 │   └── generate_preprocessing_notebook.py
+├── requirements.txt
 ├── setup_data.py
 └── README.md
 ```
@@ -82,19 +92,26 @@ Validate the local dataset:
 python3 setup_data.py
 ```
 
-Regenerate the notebooks from the tracked generators:
+Regenerate the tracked notebooks:
 
 ```bash
 python3 tools/generate_exploration_notebook.py
 python3 tools/generate_preprocessing_notebook.py
 ```
 
+Install dependencies when needed:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Notebooks
 
-| Notebook | Purpose |
-|----------|---------|
-| `01_data_exploration.ipynb` | Dataset integrity, imbalance analysis, metadata profiling, patient analysis, image inspection |
-| `02_preprocessing.ipynb` | Patient-aware split, train balancing, deterministic preprocessing, export, manifests, loaders |
+| Notebook | Description | Status |
+|----------|-------------|--------|
+| `01_data_exploration.ipynb` | Class distribution, sample images, masks, lesion coverage and dataset insights | Done |
+| `02_preprocessing.ipynb` | Effective dataset selection, lesion-centric preprocessing, export, loaders and augmentation branch | Done |
+| `03_classification.ipynb` | Binary classifier training and threshold selection experiments | In progress |
 
 ## Pipeline Outputs
 
