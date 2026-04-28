@@ -18,6 +18,7 @@ The workflow is organized around:
 - exploratory analysis of the original 7 classes
 - conversion to a binary melanoma vs non-melanoma task
 - lesion-centric preprocessing guided by segmentation masks
+- offline data augmentation as a separate export step
 - comparison between baseline training and training with augmentation
 - downstream classification experiments
 
@@ -54,7 +55,7 @@ The current notebooks assume:
 - only non-melanoma images are downsampled when building the effective dataset
 - the negative subclass mix is preserved as much as possible
 - lesion masks are used to support lesion-centric cropping
-- augmentation is evaluated as a separate experimental branch
+- augmentation is generated after preprocessing as a separate experimental branch
 
 The default effective ratio in preprocessing is `3.0` non-melanoma images for each melanoma image.
 
@@ -72,13 +73,15 @@ skin-cancer-images-segmentation/
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_preprocessing.ipynb
-│   ├── 03_classification.ipynb
+│   ├── 03_data_augmentation.ipynb
+│   ├── 04_classification.ipynb
 │   └── outputs/
 ├── outputs/
 │   └── figures/
 ├── tools/
 │   ├── generate_exploration_notebook.py
-│   └── generate_preprocessing_notebook.py
+│   ├── generate_preprocessing_notebook.py
+│   └── generate_data_augmentation_notebook.py
 ├── requirements.txt
 ├── setup_data.py
 └── README.md
@@ -97,6 +100,7 @@ Regenerate the tracked notebooks:
 ```bash
 python3 tools/generate_exploration_notebook.py
 python3 tools/generate_preprocessing_notebook.py
+python3 tools/generate_data_augmentation_notebook.py
 ```
 
 Install dependencies when needed:
@@ -110,14 +114,17 @@ pip install -r requirements.txt
 | Notebook | Description | Status |
 |----------|-------------|--------|
 | `01_data_exploration.ipynb` | Class distribution, sample images, masks, lesion coverage and dataset insights | Done |
-| `02_preprocessing.ipynb` | Effective dataset selection, lesion-centric preprocessing, export, loaders and augmentation branch | Done |
-| `03_classification.ipynb` | Binary classifier training and threshold selection experiments | In progress |
+| `02_preprocessing.ipynb` | Effective dataset selection, lesion-centric preprocessing, baseline export and baseline loaders | Done |
+| `03_data_augmentation.ipynb` | Offline augmentation export for the training split, creating the `with_augmentation` branches in `224x224` and `64x64` | Done |
+| `04_classification.ipynb` | Binary classifier training and threshold selection experiments | In progress |
 
 ## Pipeline Outputs
 
-The preprocessing notebook exports:
+The preprocessing and augmentation notebooks export:
 
-- `data/processed/without_augmentation/`
-- `data/processed/with_augmentation/`
+- `data/processed/without_augmentation/` from `02_preprocessing.ipynb`
+- `data/processed/without_augmentation_64x64/` from `02_preprocessing.ipynb`
+- `data/processed/with_augmentation/` from `03_data_augmentation.ipynb`
+- `data/processed/with_augmentation_64x64/` from `03_data_augmentation.ipynb`
 - split manifests for each experiment
 - normalization stats and preprocessing config under `notebooks/outputs/preprocessing/`
