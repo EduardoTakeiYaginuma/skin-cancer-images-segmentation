@@ -109,6 +109,38 @@ Install dependencies when needed:
 pip install -r requirements.txt
 ```
 
+## Web Application
+
+The repository now includes a richer Streamlit demo for dermatoscopic triage based on the
+final `EfficientNet-B0` experiment documented in `docs/modeling_2_training_journal.md`.
+
+Current app capabilities:
+
+- upload one or multiple dermatoscopic images
+- run the calibrated EfficientNet-B0 classifier
+- return melanoma probability plus the three-zone clinical triage output
+- generate Grad-CAM visual explanations for the classifier
+- run a U-Net segmentation model to highlight the lesion area
+- combine Grad-CAM and segmentation in the classifier frame
+- generate occlusion-sensitivity maps and hotspot crops
+- compute simple heuristic descriptors inspired by the ABCD rule
+- retrieve visually similar cases from the local processed dataset
+- compare predictions with the local dataset truth when the uploaded filename matches an ISIC case ID
+- keep a session history and export a CSV/JSON summary
+
+Main deployment settings:
+
+- classification checkpoint: `outputs/models/model_comparison/efficientnet_b0_base_224x224_calibrated.pt`
+- segmentation checkpoint: `outputs/models/unet_segmentation.pt`
+- `T_LOW = 0.003779`
+- `T_HIGH = 0.220775`
+
+Run locally:
+
+```bash
+./venv/bin/streamlit run app.py
+```
+
 ## Notebooks
 
 | Notebook | Description | Status |
