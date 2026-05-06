@@ -1,0 +1,51 @@
+{
+  "model_name": "efficientnet_b0",
+  "checkpoint_path": "outputs/models/model_comparison/efficientnet_b0_base_224x224_calibrated.pt",
+  "image_size": 224,
+  "normalization": {
+    "mean": [
+      0.751364,
+      0.518854,
+      0.539356
+    ],
+    "std": [
+      0.142365,
+      0.163025,
+      0.181591
+    ]
+  },
+  "thresholds": {
+    "t_low": 0.003779,
+    "t_high": 0.220775
+  },
+  "metrics": {
+    "auc": 0.9015,
+    "sensitivity": 0.9042,
+    "specificity": 0.7433,
+    "precision": 0.3057,
+    "f1": 0.4569
+  },
+  "segmentation": {
+    "checkpoint_path": "outputs/models/unet_segmentation.pt",
+    "image_size": 64,
+    "threshold": 0.5,
+    "crop_margin_ratio": 0.15
+  },
+  "zones": {
+    "negative": {
+      "label": "Nao melanoma",
+      "headline": "Baixo risco pelo modelo",
+      "action": "Manter como triagem de baixo risco. Em contexto clinico real, a decisao final continua sendo humana."
+    },
+    "review": {
+      "label": "Possivel melanoma",
+      "headline": "Caso intermediario",
+      "action": "Encaminhar para revisao dermatologica, porque o modelo considera o caso incerto."
+    },
+    "positive": {
+      "label": "Melanoma",
+      "headline": "Alerta alto",
+      "action": "Priorizar revisao especializada. O modelo cruzou o threshold clinico de alerta."
+    }
+  }
+}
