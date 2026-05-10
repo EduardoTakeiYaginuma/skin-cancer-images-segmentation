@@ -1,0 +1,6 @@
+# Gerados pelo Feast — não versionar
+data/registry.db
+data/online_store.db
+
+# Gerados por prepare_sources.py — derivados dos CSVs de dados
+data/sources/*.parquet
