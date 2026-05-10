@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from io import BytesIO
 from pathlib import Path
@@ -112,6 +114,19 @@ def overlay_mask_on_image(
     mask_3d = np.repeat((mask > 0)[..., None], 3, axis=2)
     image[mask_3d] = image[mask_3d] * (1.0 - alpha) + overlay[mask_3d] * alpha
     return rgb_array_to_pil(np.clip(image, 0, 255).astype(np.uint8))
+
+
+def render_bbox_visualization(
+    image_rgb: np.ndarray,
+    bbox: tuple[int, int, int, int],
+    expanded_bbox: tuple[int, int, int, int],
+) -> Image.Image:
+    img = image_rgb.copy()
+    x0, y0, x1, y1 = bbox
+    ex0, ey0, ex1, ey1 = expanded_bbox
+    cv2.rectangle(img, (x0, y0), (x1, y1), (251, 191, 36), 3)
+    cv2.rectangle(img, (ex0, ey0), (ex1, ey1), (34, 197, 94), 3)
+    return rgb_array_to_pil(img)
 
 
 def render_binary_mask(mask: np.ndarray) -> Image.Image:
@@ -250,6 +265,7 @@ class CaseAnalysis:
     classifier_input_image: Image.Image
     segmentation_overlay: Image.Image | None
     segmentation_mask_image: Image.Image | None
+    lesion_bbox_image: Image.Image | None
     classifier_segmentation_overlay: Image.Image | None
     combined_explainability_overlay: Image.Image | None
     ground_truth_overlay: Image.Image | None
@@ -261,6 +277,12 @@ class CaseAnalysis:
     lesion_heuristics: list[dict]
     segmentation_coverage: float | None
     classifier_segmentation_coverage: float | None
+    segmentation_stats: dict | None
+    classifier_segmentation_stats: dict | None
+    image_quality: dict
+    pipeline_timings: dict
+    model_info: dict
+    dataset_stats: dict
     preprocessing_note: str
     truth_note: str | None
 
@@ -284,6 +306,12 @@ class CaseAnalysis:
             "dataset_match": self.dataset_match.to_dict(),
             "segmentation_coverage": self.segmentation_coverage,
             "classifier_segmentation_coverage": self.classifier_segmentation_coverage,
+            "segmentation_stats": self.segmentation_stats,
+            "classifier_segmentation_stats": self.classifier_segmentation_stats,
+            "image_quality": self.image_quality,
+            "pipeline_timings": self.pipeline_timings,
+            "model_info": self.model_info,
+            "dataset_stats": self.dataset_stats,
             "similar_cases": [case.to_dict() for case in self.similar_cases],
             "lesion_heuristics": self.lesion_heuristics,
             "preprocessing_note": self.preprocessing_note,
@@ -337,10 +365,16 @@ class SegmentationUNet(nn.Module):
 
 
 class SkinCancerPredictor:
-    def __init__(self, config_path: str | Path | None = None, device: str | None = None) -> None:
+    def __init__(
+        self,
+        config_path: str | Path | None = None,
+        device: str | None = None,
+        build_id: str | None = None,
+    ) -> None:
         self.repo_root = resolve_repo_root()
         self.config_path = Path(config_path) if config_path else self.repo_root / "config" / "inference_config.json"
         self.config = self._load_config(self.config_path)
+        self.build_id = build_id
 
         self.image_size = int(self.config["image_size"])
         self.mean = torch.tensor(self.config["normalization"]["mean"], dtype=torch.float32).view(3, 1, 1)
@@ -353,6 +387,9 @@ class SkinCancerPredictor:
         self.seg_threshold = float(segmentation_cfg.get("threshold", 0.5))
         self.crop_margin_ratio = float(segmentation_cfg.get("crop_margin_ratio", 0.15))
         self.seg_checkpoint_rel = segmentation_cfg.get("checkpoint_path")
+        self.seg_checkpoint_path = (
+            self.repo_root / self.seg_checkpoint_rel if self.seg_checkpoint_rel else None
+        )
 
         self.device = torch.device(device) if device else self._select_device()
         self.model = self._load_classifier()
@@ -360,6 +397,14 @@ class SkinCancerPredictor:
 
         self.metadata_df = pd.read_csv(self.repo_root / "data" / "metadata.csv")
         self.metadata_by_id = self.metadata_df.set_index("image")
+        self.dataset_total = int(len(self.metadata_df))
+        self.dataset_label_counts = {
+            code: int(self.metadata_df[code].sum()) for code in DIAGNOSIS_LABELS
+        }
+        self.dataset_prevalence = {
+            code: (count / self.dataset_total if self.dataset_total else 0.0)
+            for code, count in self.dataset_label_counts.items()
+        }
 
         manifest_path = self.repo_root / "data" / "processed" / "treated_manifest.csv"
         self.treated_manifest_df = pd.read_csv(manifest_path) if manifest_path.exists() else pd.DataFrame()
@@ -368,6 +413,17 @@ class SkinCancerPredictor:
         )
         self._similarity_vectors: np.ndarray | None = None
         self._similarity_records: list[tuple[str, str, str]] = []
+        self.model_checkpoint_path = self.repo_root / self.config["checkpoint_path"]
+        self.model_checkpoint_hash = (
+            self._hash_file(self.model_checkpoint_path)
+            if self.model_checkpoint_path.exists()
+            else None
+        )
+        self.seg_checkpoint_hash = (
+            self._hash_file(self.seg_checkpoint_path)
+            if self.seg_checkpoint_path is not None and self.seg_checkpoint_path.exists()
+            else None
+        )
 
     @staticmethod
     def _load_config(path: Path) -> dict:
@@ -381,6 +437,19 @@ class SkinCancerPredictor:
         if torch.backends.mps.is_available():
             return torch.device("mps")
         return torch.device("cpu")
+
+    @staticmethod
+    def _hash_file(path: Path, chunk_size: int = 1024 * 1024) -> str | None:
+        if not path.exists():
+            return None
+        sha1 = hashlib.sha1()
+        with path.open("rb") as handle:
+            while True:
+                chunk = handle.read(chunk_size)
+                if not chunk:
+                    break
+                sha1.update(chunk)
+        return sha1.hexdigest()
 
     def _load_classifier(self) -> nn.Module:
         model = timm.create_model(self.config["model_name"], pretrained=False, num_classes=1)
@@ -478,6 +547,89 @@ class SkinCancerPredictor:
         mask = (prob_resized >= self.seg_threshold).astype(np.uint8)
         coverage = float(mask.mean())
         return mask, coverage
+
+    @staticmethod
+    def _compute_image_quality(image: Image.Image) -> dict:
+        image_rgb = np.asarray(image.convert("RGB"))
+        gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
+        focus_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+        brightness = float(gray.mean() / 255.0)
+        contrast = float(gray.std() / 255.0)
+        hsv = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HSV)
+        saturation = float(hsv[..., 1].mean() / 255.0)
+        highlight_ratio = float((gray > 245).mean())
+        shadow_ratio = float((gray < 10).mean())
+        return {
+            "focus_var": focus_var,
+            "brightness": brightness,
+            "contrast": contrast,
+            "saturation": saturation,
+            "highlight_ratio": highlight_ratio,
+            "shadow_ratio": shadow_ratio,
+        }
+
+    @staticmethod
+    def _compute_segmentation_stats(
+        image: Image.Image,
+        mask: np.ndarray | None,
+    ) -> dict | None:
+        if mask is None:
+            return None
+        mask_uint8 = (mask > 0).astype(np.uint8)
+        area_px = int(mask_uint8.sum())
+        if area_px == 0:
+            return None
+        bbox = compute_bbox_from_mask(mask_uint8)
+        contours, _ = cv2.findContours(mask_uint8 * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        perimeter_px = float(sum(cv2.arcLength(cnt, True) for cnt in contours)) if contours else 0.0
+        circularity = (perimeter_px ** 2) / max(4.0 * np.pi * float(area_px), 1e-8)
+
+        cropped_mask = crop_array(mask_uint8, bbox) if bbox is not None else mask_uint8
+        square_mask = pad_to_square(cropped_mask)
+        horizontal_iou = ((square_mask > 0) & (np.fliplr(square_mask) > 0)).sum() / max(
+            ((square_mask > 0) | (np.fliplr(square_mask) > 0)).sum(),
+            1,
+        )
+        vertical_iou = ((square_mask > 0) & (np.flipud(square_mask) > 0)).sum() / max(
+            ((square_mask > 0) | (np.flipud(square_mask) > 0)).sum(),
+            1,
+        )
+        asymmetry_score = float(np.clip(1.0 - ((horizontal_iou + vertical_iou) / 2.0), 0.0, 1.0))
+
+        width, height = image.size
+        area_ratio = float(area_px / max(width * height, 1))
+        if bbox is not None:
+            x0, y0, x1, y1 = bbox
+            diameter_px = float(max(x1 - x0, y1 - y0))
+        else:
+            diameter_px = 0.0
+        return {
+            "area_px": area_px,
+            "area_ratio": area_ratio,
+            "perimeter_px": perimeter_px,
+            "circularity": float(circularity),
+            "asymmetry": asymmetry_score,
+            "diameter_px": diameter_px,
+            "bbox": bbox,
+        }
+
+    def _dataset_stats_for_case(self, dataset_match: DatasetMatch, predicted_binary: int) -> dict:
+        melanoma_rate = float(self.dataset_prevalence.get("MEL", 0.0))
+        stats = {
+            "total": self.dataset_total,
+            "melanoma_rate": melanoma_rate,
+            "predicted_label": "Melanoma" if predicted_binary == 1 else "Nao melanoma",
+            "predicted_rate": melanoma_rate if predicted_binary == 1 else 1.0 - melanoma_rate,
+        }
+        if dataset_match.diagnosis_code and dataset_match.diagnosis_code in self.dataset_prevalence:
+            stats.update(
+                {
+                    "label_code": dataset_match.diagnosis_code,
+                    "label_name": dataset_match.diagnosis_label,
+                    "label_rate": float(self.dataset_prevalence[dataset_match.diagnosis_code]),
+                }
+            )
+        return stats
 
     def _crop_for_classifier(
         self,
@@ -768,17 +920,32 @@ class SkinCancerPredictor:
             return "Acerto: caso benigno reconhecido." if dataset_match.binary_label == 0 else "Falso negativo: o caso real do dataset e melanoma."
         return "Zona intermediaria: o caso foi encaminhado para revisao manual."
 
-    def analyze_upload(self, file_bytes: bytes, file_name: str) -> CaseAnalysis:
+    def analyze_upload(
+        self,
+        file_bytes: bytes,
+        file_name: str,
+        on_step: Callable[[int, Image.Image | None], None] | None = None,
+    ) -> CaseAnalysis:
+        _step = on_step or (lambda *_: None)
+
+        timings: dict[str, float] = {}
+        total_start = time.perf_counter()
+        step_start = time.perf_counter()
         uploaded_image = Image.open(BytesIO(file_bytes)).convert("RGB")
         image_id = Path(file_name).stem
         dataset_match = self._lookup_dataset_match(image_id)
+        timings["load_upload"] = time.perf_counter() - step_start
 
         if dataset_match.raw_path:
             original_image = load_pil_image(dataset_match.raw_path)
         else:
             original_image = uploaded_image.copy()
 
+        _step(0, original_image)
+
+        step_start = time.perf_counter()
         segmentation_mask, segmentation_coverage = self._predict_segmentation_mask(original_image)
+        timings["segmentacao_original"] = time.perf_counter() - step_start
         segmentation_overlay = None
         segmentation_mask_image = None
         if segmentation_mask is not None:
@@ -789,6 +956,24 @@ class SkinCancerPredictor:
                 alpha=0.40,
             )
             segmentation_mask_image = render_binary_mask(segmentation_mask)
+
+        _step(1, segmentation_mask_image)
+        _step(2, segmentation_overlay)
+
+        lesion_bbox_image = None
+        if segmentation_mask is not None:
+            _bbox = compute_bbox_from_mask(segmentation_mask)
+            if _bbox is not None:
+                _orig_rgb = pil_to_rgb_array(original_image)
+                _expanded = expand_bbox(
+                    _bbox,
+                    width=_orig_rgb.shape[1],
+                    height=_orig_rgb.shape[0],
+                    margin_ratio=self.crop_margin_ratio,
+                )
+                lesion_bbox_image = render_bbox_visualization(_orig_rgb, _bbox, _expanded)
+
+        _step(3, lesion_bbox_image)
 
         ground_truth_overlay = None
         if dataset_match.mask_path:
@@ -801,6 +986,7 @@ class SkinCancerPredictor:
                 alpha=0.36,
             )
 
+        step_start = time.perf_counter()
         if dataset_match.treated_path:
             classifier_source_image = load_pil_image(dataset_match.treated_path)
             preprocessing_source = "treated_manifest"
@@ -809,8 +995,13 @@ class SkinCancerPredictor:
             classifier_source_image, preprocessing_source, preprocessing_note = self._crop_for_classifier(
                 original_image, segmentation_mask
             )
+        timings["preprocess_pipeline"] = time.perf_counter() - step_start
 
+        _step(4, classifier_source_image)
+
+        step_start = time.perf_counter()
         classifier_mask, classifier_mask_coverage = self._predict_segmentation_mask(classifier_source_image)
+        timings["segmentacao_frame"] = time.perf_counter() - step_start
         classifier_segmentation_overlay = None
         if classifier_mask is not None:
             classifier_segmentation_overlay = overlay_mask_on_image(
@@ -820,13 +1011,17 @@ class SkinCancerPredictor:
                 alpha=0.36,
             )
 
+        step_start = time.perf_counter()
         probability, gradcam_overlay, gradcam_heatmap = self._predict_with_gradcam(classifier_source_image)
+        timings["classificacao_gradcam"] = time.perf_counter() - step_start
         combined_explainability_overlay = render_combined_explainability(
             np.asarray(classifier_source_image.resize((self.image_size, self.image_size), Image.Resampling.BILINEAR)),
             gradcam_heatmap,
             resize_binary_mask(classifier_mask, (self.image_size, self.image_size)) if classifier_mask is not None else None,
         )
+        step_start = time.perf_counter()
         occlusion_overlay, occlusion_map = self._build_occlusion_overlay(classifier_source_image, probability)
+        timings["oclusao"] = time.perf_counter() - step_start
         gradcam_hotspots = extract_hotspot_crops(
             classifier_source_image.resize((self.image_size, self.image_size), Image.Resampling.BILINEAR),
             gradcam_heatmap,
@@ -837,8 +1032,15 @@ class SkinCancerPredictor:
             occlusion_map,
             top_k=3,
         )
+        step_start = time.perf_counter()
         similar_cases = self._find_similar_cases(classifier_source_image, dataset_match.image_id)
+        timings["similares"] = time.perf_counter() - step_start
+        step_start = time.perf_counter()
         lesion_heuristics = self._compute_lesion_heuristics(classifier_source_image, classifier_mask)
+        segmentation_stats = self._compute_segmentation_stats(original_image, segmentation_mask)
+        classifier_segmentation_stats = self._compute_segmentation_stats(classifier_source_image, classifier_mask)
+        image_quality = self._compute_image_quality(uploaded_image)
+        timings["heuristicas"] = time.perf_counter() - step_start
 
         zone_key, zone_config = self.classify_probability(probability)
         prediction = PredictionResult(
@@ -854,11 +1056,22 @@ class SkinCancerPredictor:
             preprocessing_source=preprocessing_source,
         )
         truth_note = self._truth_note(prediction, dataset_match)
+        dataset_stats = self._dataset_stats_for_case(dataset_match, prediction.predicted_binary)
+        model_info = {
+            "build_id": self.build_id,
+            "checkpoint_path": str(self.model_checkpoint_path),
+            "checkpoint_hash": self.model_checkpoint_hash,
+            "seg_checkpoint_path": str(self.seg_checkpoint_path) if self.seg_checkpoint_path else None,
+            "seg_checkpoint_hash": self.seg_checkpoint_hash,
+        }
+        timings["total"] = time.perf_counter() - total_start
 
         classifier_input_image = classifier_source_image.resize(
             (self.image_size, self.image_size),
             Image.Resampling.BILINEAR,
         )
+        _step(5, classifier_input_image)
+
         case_id = hashlib.sha1(f"{file_name}:{len(file_bytes)}".encode("utf-8") + file_bytes).hexdigest()[:12]
         display_name = dataset_match.image_id or Path(file_name).name
 
@@ -874,6 +1087,7 @@ class SkinCancerPredictor:
             classifier_input_image=classifier_input_image,
             segmentation_overlay=segmentation_overlay,
             segmentation_mask_image=segmentation_mask_image,
+            lesion_bbox_image=lesion_bbox_image,
             classifier_segmentation_overlay=classifier_segmentation_overlay,
             combined_explainability_overlay=combined_explainability_overlay,
             ground_truth_overlay=ground_truth_overlay,
@@ -885,6 +1099,12 @@ class SkinCancerPredictor:
             lesion_heuristics=lesion_heuristics,
             segmentation_coverage=segmentation_coverage,
             classifier_segmentation_coverage=classifier_mask_coverage,
+            segmentation_stats=segmentation_stats,
+            classifier_segmentation_stats=classifier_segmentation_stats,
+            image_quality=image_quality,
+            pipeline_timings=timings,
+            model_info=model_info,
+            dataset_stats=dataset_stats,
             preprocessing_note=preprocessing_note,
             truth_note=truth_note,
         )
