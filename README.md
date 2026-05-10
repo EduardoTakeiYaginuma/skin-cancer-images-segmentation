@@ -150,6 +150,67 @@ Run locally:
 | `03_data_augmentation.ipynb` | Offline augmentation export for the training split, creating the `with_augmentation` branches in `224x224` and `64x64` | Done |
 | `04_classification.ipynb` | Binary classifier training and threshold selection experiments | In progress |
 
+## Feature Store (Feast)
+
+The project integrates [Feast](https://feast.dev) for versioned feature management, enabling consistent feature retrieval for both training and serving.
+
+### Structure
+
+```text
+feature_store/
+├── feature_repo/
+│   ├── feature_store.yaml     # Configuração local (SQLite registry + online store)
+│   ├── entities.py            # Entidade principal: image_id
+│   ├── data_sources.py        # FileSource apontando para os Parquets gerados
+│   ├── feature_views.py       # lesion_classification + preprocessing_stats
+│   └── feature_services.py   # melanoma_training_features + melanoma_serving_features
+├── data/
+│   └── sources/               # Parquets gerados por prepare_sources.py (gitignored)
+└── scripts/
+    ├── prepare_sources.py     # Converte CSVs do projeto para Parquet
+    ├── apply_registry.py      # Registra features no Feast (feast apply)
+    ├── get_historical_features.py  # Exemplo de retrieval para treino
+    └── materialize_online.py  # Materializa para online store
+```
+
+### Quickstart
+
+```bash
+# 0. Ativar o ambiente virtual do projeto
+source venv/bin/activate
+
+# 1. Instalar dependências (inclui feast e pyarrow)
+python3 -m pip install -r requirements.txt
+
+# 2. Converter os CSVs do projeto para Parquet (fontes do Feast)
+python3 feature_store/scripts/prepare_sources.py
+
+# 3. Registrar as features no registry local
+python3 feature_store/scripts/apply_registry.py
+
+# 4. Recuperar features históricas para treino
+python3 feature_store/scripts/get_historical_features.py
+
+# 5. (Opcional) Materializar para online store e servir em tempo real
+python3 feature_store/scripts/materialize_online.py
+```
+
+### Feature Views
+
+| Feature View | Entidade | Features |
+|---|---|---|
+| `lesion_classification` | `image_id` | MEL, NV, BCC, AKIEC, BKL, DF, VASC, binary_label, label, split |
+| `preprocessing_stats` | `image_id` | mask_coverage_after_crop, hair_pixels_detected, final_height, final_width |
+
+### Feature Services
+
+| Serviço | Uso | Features incluídas |
+|---|---|---|
+| `melanoma_training_features` | Treino offline | Todas as features acima |
+| `melanoma_serving_features` | Inferência online | mask_coverage_after_crop, hair_pixels_detected |
+
+---
+
 ## Pipeline Outputs
 
 The preprocessing and augmentation notebooks export:
