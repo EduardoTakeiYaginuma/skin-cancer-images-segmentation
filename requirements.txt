@@ -39,3 +39,17 @@ tqdm==4.67.3
 streamlit>=1.35,<2.0
 typing_extensions==4.15.0
 urllib3==2.6.3
+
+# Feature Store
+# Nota: feast 0.42 declara numpy<2 e pandas<3, mas funciona com as versões acima
+# em ambiente local. Instale com: pip install feast==0.42.0 --no-deps
+feast==0.42.0
+pyarrow>=14.0
+dask>=2024.1
+bigtree
+colorama<1,>=0.3.9
+dill~=0.3.0
+tabulate<1,>=0.8.0
+tenacity<9,>=7
+typeguard>=3
+pytz
