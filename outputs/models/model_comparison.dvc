@@ -1,0 +1,6 @@
+outs:
+- md5: f67fec00f44eda7d55660ce6ef1e627e.dir
+  size: 459007319
+  nfiles: 9
+  hash: md5
+  path: model_comparison

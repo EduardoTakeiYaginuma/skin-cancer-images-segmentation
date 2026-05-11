@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from io import BytesIO
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 import cv2
 import numpy as np
@@ -933,6 +936,7 @@ class SkinCancerPredictor:
         step_start = time.perf_counter()
         uploaded_image = Image.open(BytesIO(file_bytes)).convert("RGB")
         image_id = Path(file_name).stem
+        logger.info("predict_start", extra={"image_id": image_id, "file_name": file_name, "file_size_bytes": len(file_bytes)})
         dataset_match = self._lookup_dataset_match(image_id)
         timings["load_upload"] = time.perf_counter() - step_start
 
@@ -1065,6 +1069,15 @@ class SkinCancerPredictor:
             "seg_checkpoint_hash": self.seg_checkpoint_hash,
         }
         timings["total"] = time.perf_counter() - total_start
+        logger.info(
+            "predict_done",
+            extra={
+                "image_id": image_id,
+                "melanoma_prob": round(probability, 4),
+                "triage_zone": zone_key,
+                "latency_ms": round(timings["total"] * 1000, 2),
+            },
+        )
 
         classifier_input_image = classifier_source_image.resize(
             (self.image_size, self.image_size),

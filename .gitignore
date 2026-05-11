@@ -75,16 +75,19 @@ venv.bak/
 
 # Local datasets and generated artifacts
 archive/
+notebooks/outputs/
+
+# DVC: ignora conteúdo de data/ e outputs/ mas permite ponteiros .dvc
 data/images/
 data/masks/
 data/metadata.csv
 data/ISIC_2020_Training_GroundTruth.csv
 data/processed/
-outputs/
-notebooks/outputs/
-
-# Model checkpoints
-outputs/models/
-
-
 data/*
+!data/*.dvc
+
+outputs/figures/
+outputs/models/**/*.pt
+outputs/models/mlflow/
+!outputs/models/*.dvc
+!outputs/models/**/*.dvc

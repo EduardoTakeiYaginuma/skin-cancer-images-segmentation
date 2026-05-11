@@ -1,0 +1,53 @@
+stages:
+  preprocess:
+    cmd: python -c "
+      import subprocess, sys;
+      subprocess.run([sys.executable, '-m', 'jupyter', 'nbconvert',
+        '--to', 'script', 'notebooks/03_preprocessing.ipynb',
+        '--output', '/tmp/preprocessing_stage'],
+        check=True);
+      subprocess.run([sys.executable, '/tmp/preprocessing_stage.py'], check=True)
+      "
+    deps:
+      - data/metadata.csv
+      - data/metadata/train_split.csv
+      - data/metadata/val_split.csv
+      - data/metadata/test_split.csv
+      - notebooks/outputs/preprocessing/normalization_stats.json
+      - notebooks/outputs/preprocessing/preprocessing_config.json
+    outs:
+      - data/processed
+    params:
+      - train.neg_ratio
+      - train.input_size
+
+  train:
+    cmd: python train.py
+    deps:
+      - train.py
+      - mlflow_config.py
+      - data/metadata/train_split.csv
+      - data/metadata/val_split.csv
+      - data/metadata/test_split.csv
+      - data/images
+      - notebooks/outputs/preprocessing/normalization_stats.json
+    outs:
+      - outputs/models/mlflow
+    params:
+      - train
+
+  evaluate:
+    cmd: python evaluate.py
+    deps:
+      - evaluate.py
+      - outputs/models/mlflow
+      - data/metadata/test_split.csv
+      - data/images
+      - notebooks/outputs/preprocessing/normalization_stats.json
+    metrics:
+      - metrics.json:
+          cache: false
+    params:
+      - train.model_arch
+      - train.input_size
+      - train.batch_size

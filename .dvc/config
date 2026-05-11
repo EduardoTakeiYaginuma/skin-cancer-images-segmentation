@@ -1,0 +1,5 @@
+[core]
+    remote = s3remote
+['remote "s3remote"']
+    url = s3://skin-cancer-segmentation/dvc-store
+    region = us-east-2

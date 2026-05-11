@@ -1,0 +1,36 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./outputs/models:/app/outputs/models:ro
+      - ./data/processed:/app/data/processed:ro
+      - ./data/metadata.csv:/app/data/metadata.csv:ro
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./outputs/models:/app/outputs/models:ro
+      - ./data:/app/data:ro
+      - ./app.py:/app/app.py:ro
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+    command: ["streamlit", "run", "app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+
+  mlflow:
+    image: python:3.11-slim
+    ports:
+      - "5005:5005"
+    volumes:
+      - ./mlruns:/mlruns
+    command: >
+      bash -c "pip install mlflow>=2.7 -q && mlflow ui --host 0.0.0.0 --port 5005 --backend-store-uri /mlruns"

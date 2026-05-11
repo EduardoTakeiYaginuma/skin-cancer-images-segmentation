@@ -1,0 +1,5 @@
+outs:
+- md5: 5da82fa15ca86153e72946bf47e81821
+  size: 124141473
+  hash: md5
+  path: unet_segmentation.pt
