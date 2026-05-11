@@ -1,0 +1,12 @@
+exclude = [
+    "notebooks/",
+    "skin-cancer-lesions-segmentation-using-unet.ipynb",
+]
+
+[lint]
+select = ["E", "F"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+"api/main.py" = ["E402"]
+"skin_app/inference.py" = ["E402"]

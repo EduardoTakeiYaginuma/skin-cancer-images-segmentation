@@ -16,7 +16,6 @@ import pandas as pd
 import timm
 import torch
 import torch.nn as nn
-import yaml
 from dotenv import load_dotenv
 from mlflow import MlflowClient
 from sklearn.metrics import auc, confusion_matrix, f1_score, roc_auc_score, roc_curve
@@ -256,8 +255,13 @@ def _roc_png(labels: np.ndarray, probs: np.ndarray, title: str) -> bytes:
     fig, ax = plt.subplots(figsize=(6, 5))
     ax.plot(fpr, tpr, label=f"AUC = {roc_auc:.4f}")
     ax.plot([0, 1], [0, 1], "k--")
-    ax.set_xlabel("FPR"); ax.set_ylabel("TPR"); ax.set_title(title); ax.legend()
-    buf = io.BytesIO(); fig.savefig(buf, format="png", bbox_inches="tight"); plt.close(fig)
+    ax.set_xlabel("FPR")
+    ax.set_ylabel("TPR")
+    ax.set_title(title)
+    ax.legend()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
     return buf.getvalue()
 
 
@@ -265,13 +269,18 @@ def _cm_png(labels: np.ndarray, preds: np.ndarray) -> bytes:
     cm = confusion_matrix(labels, preds, labels=[0, 1])
     fig, ax = plt.subplots(figsize=(4, 4))
     ax.imshow(cm, cmap="Blues")
-    ax.set_xticks([0, 1]); ax.set_yticks([0, 1])
-    ax.set_xticklabels(["Non-mel", "Melanoma"]); ax.set_yticklabels(["Non-mel", "Melanoma"])
-    ax.set_xlabel("Predicted"); ax.set_ylabel("True")
+    ax.set_xticks([0, 1])
+    ax.set_yticks([0, 1])
+    ax.set_xticklabels(["Non-mel", "Melanoma"])
+    ax.set_yticklabels(["Non-mel", "Melanoma"])
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("True")
     for i in range(2):
         for j in range(2):
             ax.text(j, i, str(cm[i, j]), ha="center", va="center")
-    buf = io.BytesIO(); fig.savefig(buf, format="png", bbox_inches="tight"); plt.close(fig)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
     return buf.getvalue()
 
 

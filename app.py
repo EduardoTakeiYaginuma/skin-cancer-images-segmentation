@@ -922,7 +922,7 @@ def render_architecture_tab(config: dict) -> None:
     with col_a:
         st.markdown(_section(
             "Problema e Dataset",
-            f"""O melanoma é o tipo de câncer de pele com maior letalidade. Detectado precocemente,
+            """O melanoma é o tipo de câncer de pele com maior letalidade. Detectado precocemente,
             a taxa de sobrevivência em 5 anos supera 98%; diagnosticado tardiamente, cai para menos de 25%.
             <br><br>
             O modelo foi treinado no <strong>HAM10000</strong> (<em>Human Against Machine with 10000 training images</em>),
@@ -936,7 +936,7 @@ def render_architecture_tab(config: dict) -> None:
 
         st.markdown(_section(
             "Segmentação — U-Net",
-            f"""A segmentação da lesão é realizada por uma <strong>U-Net</strong> treinada do zero,
+            """A segmentação da lesão é realizada por uma <strong>U-Net</strong> treinada do zero,
             com arquitetura encoder–decoder e <em>skip connections</em> em 4 níveis de resolução
             (64 → 32 → 16 → 8 → 4 pixels).
             <br><br>
@@ -952,7 +952,7 @@ def render_architecture_tab(config: dict) -> None:
     with col_b:
         st.markdown(_section(
             "Classificação — EfficientNet-B0",
-            f"""O classificador é um <strong>EfficientNet-B0</strong> com pesos pré-treinados no
+            """O classificador é um <strong>EfficientNet-B0</strong> com pesos pré-treinados no
             ImageNet, fine-tuned no HAM10000 com a formulação binária.
             <br><br>
             O EfficientNet escala profundidade, largura e resolução da rede de forma conjunta
@@ -967,7 +967,7 @@ def render_architecture_tab(config: dict) -> None:
 
         st.markdown(_section(
             "Explicabilidade",
-            f"""Duas técnicas de explicabilidade são aplicadas sobre o classificador:
+            """Duas técnicas de explicabilidade são aplicadas sobre o classificador:
             <br><br>
             <strong>Grad-CAM</strong> — calcula o gradiente do score de saída em relação aos
             mapas de ativação da última camada convolucional (<code>conv_head</code>),

@@ -9,8 +9,6 @@ from dataclasses import asdict, dataclass
 from io import BytesIO
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 import cv2
 import numpy as np
 import pandas as pd
@@ -19,6 +17,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 
 DIAGNOSIS_LABELS = {

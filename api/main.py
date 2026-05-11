@@ -1,11 +1,9 @@
 """FastAPI REST service for melanoma inference."""
 from __future__ import annotations
 
+import os
 import time
 import uuid
-from pathlib import Path
-
-import os
 
 import boto3
 from dotenv import load_dotenv
