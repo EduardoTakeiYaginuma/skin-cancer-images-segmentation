@@ -1,0 +1,30 @@
+# Dependências da imagem Docker da FastAPI.
+# Mantido separado do requirements.txt (pip freeze local) para evitar
+# conflitos de versão (feast/streamlit vs numpy/pandas) no build.
+
+# Core ML
+numpy>=1.26,<2
+pandas>=1.4,<3
+scikit-learn>=1.3
+scipy>=1.11
+Pillow>=9.0
+opencv-python-headless>=4.10,<5
+timm>=1.0
+PyYAML>=6.0
+requests>=2.28
+
+# API
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+
+# AWS
+boto3>=1.34
+botocore>=1.34
+
+# MLflow (carregamento do modelo registry)
+mlflow>=2.7
+
+# Logging / Env
+python-json-logger>=2.0
+python-dotenv>=1.0
