@@ -445,25 +445,29 @@ def compute_percentile(value: float, values: list[float]) -> float | None:
 
 def render_top_metrics(model_key: str) -> None:
     reg = MODEL_REGISTRY[model_key]
-    metrics = reg.get("metrics")
-    t_high = reg["thresholds"]["t_high"]
-    t_low = reg["thresholds"]["t_low"]
-    na = "n/d"
-    cols = st.columns(6)
-    with cols[0]:
-        render_metric_card("AUC", f'{metrics["auc"]:.4f}' if metrics else na, reg["model_name"])
-    _pct = lambda v: f'{v * 100:.1f}%' if v is not None else na
-    _f4  = lambda v: f'{v:.4f}'        if v is not None else na
-    with cols[1]:
-        render_metric_card("Sensibilidade", _pct(metrics["sensitivity"]) if metrics else na, "Meta clinica priorizando melanoma")
-    with cols[2]:
-        render_metric_card("Especificidade", _pct(metrics["specificity"]) if metrics else na, "Controle de falso positivo")
-    with cols[3]:
-        render_metric_card("F1", _f4(metrics["f1"]) if metrics else na, "Equilibrio entre precisao e recall")
-    with cols[4]:
-        render_metric_card("Precisao", _pct(metrics["precision"]) if metrics else na, "Proporcao de alertas corretos")
-    with cols[5]:
-        render_metric_card("T_HIGH", f'{t_high:.4f}', f"T_LOW = {t_low:.4f}")
+    metrics = reg.get("metrics") or {}
+    t_high = reg["thresholds"].get("t_high")
+    t_low  = reg["thresholds"].get("t_low")
+
+    _pct = lambda v: f'{v * 100:.1f}%'
+    _f4  = lambda v: f'{v:.4f}'
+
+    candidates = [
+        ("AUC",          metrics.get("auc"),        _f4,  reg.get("model_name", "")),
+        ("Sensibilidade", metrics.get("sensitivity"), _pct, "Meta clinica priorizando melanoma"),
+        ("Especificidade",metrics.get("specificity"), _pct, "Controle de falso positivo"),
+        ("F1",            metrics.get("f1"),          _f4,  "Equilibrio entre precisao e recall"),
+        ("Precisao",      metrics.get("precision"),   _pct, "Proporcao de alertas corretos"),
+        ("T_HIGH",        t_high,                     _f4,  f"T_LOW = {_f4(t_low)}" if t_low is not None else ""),
+    ]
+
+    visible = [(label, fmt(val), caption) for label, val, fmt, caption in candidates if val is not None]
+    if not visible:
+        return
+    cols = st.columns(len(visible))
+    for col, (label, value, caption) in zip(cols, visible):
+        with col:
+            render_metric_card(label, value, caption)
 
 
 def _risk_visual_pos(p: float, t_low: float, t_high: float) -> float:
@@ -991,37 +995,55 @@ def render_history_tab(analyses: list[CaseAnalysis]) -> None:
     )
 
 
-def render_model_tab(config: dict) -> None:
-    st.markdown("**Resumo do experimento implantado**")
-    st.write(
-        f"Modelo ativo: **{config.get('model_name', 'n/d')}** | "
-        f"Imagem de entrada: {config.get('image_size', 'n/d')}×{config.get('image_size', 'n/d')} px. "
-        "Pipeline: U-Net de segmentacao → crop centrado na lesao → classificador → sistema de 3 zonas."
+_MODEL_COMPARISON = pd.DataFrame([
+    {"modelo": "ResNet50",       "experimento": "base_224x224", "t_low": 0.0762, "t_high": 0.2548, "zona_nao_mel_n": 740,  "zona_nao_mel_mel_count": 8,  "zona_nao_mel_mel_pct": 4.79,  "zona_incerta_n": 248, "zona_incerta_pct_total": 16.50, "zona_incerta_mel_count": 13, "zona_incerta_mel_pct": 7.78,  "zona_mel_n": 515, "zona_mel_mel_count": 146, "zona_mel_mel_pct": 87.43, "auc_test": 0.8901},
+    {"modelo": "EfficientNet-B0","experimento": "base_64x64",   "t_low": 0.0000, "t_high": 0.0002, "zona_nao_mel_n": 259,  "zona_nao_mel_mel_count": 5,  "zona_nao_mel_mel_pct": 2.99,  "zona_incerta_n": 430, "zona_incerta_pct_total": 28.61, "zona_incerta_mel_count": 17, "zona_incerta_mel_pct": 10.18, "zona_mel_n": 814, "zona_mel_mel_count": 145, "zona_mel_mel_pct": 86.83, "auc_test": 0.7773},
+    {"modelo": "ResNet50",       "experimento": "aug_224x224",  "t_low": 0.1451, "t_high": 0.4432, "zona_nao_mel_n": 781,  "zona_nao_mel_mel_count": 5,  "zona_nao_mel_mel_pct": 2.99,  "zona_incerta_n": 340, "zona_incerta_pct_total": 22.62, "zona_incerta_mel_count": 19, "zona_incerta_mel_pct": 11.38, "zona_mel_n": 382, "zona_mel_mel_count": 143, "zona_mel_mel_pct": 85.63, "auc_test": 0.9128},
+    {"modelo": "EfficientNet-B0","experimento": "aug_224x224",  "t_low": 0.0518, "t_high": 0.3005, "zona_nao_mel_n": 809,  "zona_nao_mel_mel_count": 9,  "zona_nao_mel_mel_pct": 5.39,  "zona_incerta_n": 259, "zona_incerta_pct_total": 17.23, "zona_incerta_mel_count": 18, "zona_incerta_mel_pct": 10.78, "zona_mel_n": 435, "zona_mel_mel_count": 140, "zona_mel_mel_pct": 83.83, "auc_test": 0.9035},
+    {"modelo": "EfficientNet-B0","experimento": "aug_64x64",    "t_low": 0.0000, "t_high": 0.0015, "zona_nao_mel_n": 365,  "zona_nao_mel_mel_count": 5,  "zona_nao_mel_mel_pct": 2.99,  "zona_incerta_n": 377, "zona_incerta_pct_total": 25.08, "zona_incerta_mel_count": 24, "zona_incerta_mel_pct": 14.37, "zona_mel_n": 761, "zona_mel_mel_count": 138, "zona_mel_mel_pct": 82.63, "auc_test": 0.7577},
+    {"modelo": "ResNet50",       "experimento": "aug_64x64",    "t_low": 0.1969, "t_high": 0.4212, "zona_nao_mel_n": 727,  "zona_nao_mel_mel_count": 6,  "zona_nao_mel_mel_pct": 3.59,  "zona_incerta_n": 291, "zona_incerta_pct_total": 19.36, "zona_incerta_mel_count": 23, "zona_incerta_mel_pct": 13.77, "zona_mel_n": 485, "zona_mel_mel_count": 138, "zona_mel_mel_pct": 82.63, "auc_test": 0.8677},
+    {"modelo": "EfficientNet-B0","experimento": "base_224x224", "t_low": 0.0003, "t_high": 0.0409, "zona_nao_mel_n": 736,  "zona_nao_mel_mel_count": 7,  "zona_nao_mel_mel_pct": 4.19,  "zona_incerta_n": 331, "zona_incerta_pct_total": 22.02, "zona_incerta_mel_count": 22, "zona_incerta_mel_pct": 13.17, "zona_mel_n": 436, "zona_mel_mel_count": 138, "zona_mel_mel_pct": 82.63, "auc_test": 0.8897},
+    {"modelo": "ResNet50",       "experimento": "base_64x64",   "t_low": 0.0798, "t_high": 0.3839, "zona_nao_mel_n": 588,  "zona_nao_mel_mel_count": 3,  "zona_nao_mel_mel_pct": 1.80,  "zona_incerta_n": 409, "zona_incerta_pct_total": 27.21, "zona_incerta_mel_count": 27, "zona_incerta_mel_pct": 16.17, "zona_mel_n": 506, "zona_mel_mel_count": 137, "zona_mel_mel_pct": 82.04, "auc_test": 0.8703},
+])
+_DEPLOYED_MODEL = ("EfficientNet-B0", "aug_224x224")
+
+
+def render_model_tab() -> None:
+    st.markdown("**Comparacao de modelos — sistema de 3 zonas no conjunto de teste**")
+
+    df = _MODEL_COMPARISON.copy().sort_values("auc_test", ascending=False).reset_index(drop=True)
+
+    # Marca o modelo implantado
+    deployed_mask = (df["modelo"] == _DEPLOYED_MODEL[0]) & (df["experimento"] == _DEPLOYED_MODEL[1])
+
+    styled = (
+        df.style
+        .format({
+            "t_low":  "{:.4f}",
+            "t_high": "{:.4f}",
+            "zona_nao_mel_mel_pct":    "{:.2f}%",
+            "zona_incerta_pct_total":  "{:.2f}%",
+            "zona_incerta_mel_pct":    "{:.2f}%",
+            "zona_mel_mel_pct":        "{:.2f}%",
+            "auc_test":                "{:.4f}",
+        })
+        .apply(
+            lambda row: ["background-color:#dcfce7; font-weight:700" if deployed_mask.iloc[row.name] else "" for _ in row],
+            axis=1,
+        )
+        .bar(subset=["auc_test"], color="#bfdbfe", vmin=0.75, vmax=0.92)
+        .bar(subset=["zona_mel_mel_pct"], color="#fde68a", vmin=80, vmax=90)
+        .bar(subset=["zona_nao_mel_mel_pct"], color="#fecaca", vmin=0, vmax=6)
     )
-    details_cols = st.columns(3)
-    details_cols[0].write(f"Checkpoint: {config['checkpoint_path']}")
-    details_cols[1].write(f"T_LOW: {config['thresholds']['t_low']:.6f}")
-    details_cols[2].write(f"T_HIGH: {config['thresholds']['t_high']:.6f}")
 
-    figure_specs = [
-        ("Curvas ROC e PR", MODEL_FIG_DIR / "roc_pr_curves.png"),
-        ("Trade-off por threshold", MODEL_FIG_DIR / "threshold_tradeoff.png"),
-        ("Curvas de treino", MODEL_FIG_DIR / "training_curves.png"),
-        ("Matriz de confusao", MODEL_FIG_DIR / "confusion_matrix.png"),
-    ]
+    st.dataframe(styled, use_container_width=True, hide_index=True)
 
-    available = [(title, path) for title, path in figure_specs if path.exists()]
-    if not available:
-        st.info("As figuras do experimento nao foram encontradas em `outputs/figures/modeling_2`.")
-        return
-
-    for idx in range(0, len(available), 2):
-        row = st.columns(2, gap="large")
-        for col, spec in zip(row, available[idx:idx + 2]):
-            title, path = spec
-            with col:
-                st.markdown(f"**{title}**")
-                st.image(str(path), use_container_width=True)
+    st.caption(
+        "Verde = modelo implantado (EfficientNet-B0 aug_224x224). "
+        "Barra azul = AUC no teste. "
+        "Barra amarela = % melanomas capturados na zona positiva. "
+        "Barra vermelha = % melanomas perdidos na zona negativa (falsos negativos criticos)."
+    )
 
 
 def render_pipeline_tab(case: CaseAnalysis) -> None:
@@ -1539,22 +1561,16 @@ def main() -> None:
 
     render_experiment_comparison(active_case_id)
 
-    result_tab, pipeline_tab, dataset_tab, history_tab, arch_tab, model_tab = st.tabs(
-        ["Resultado", "Pipeline", "Dataset", "Lote e historico", "Arquitetura", "Modelo"]
+    result_tab, pipeline_tab, model_tab = st.tabs(
+        ["Resultado", "Pipeline", "Modelo"]
     )
 
     with result_tab:
         render_result_tab(active_case, session_analyses)
     with pipeline_tab:
         render_pipeline_tab(active_case)
-    with dataset_tab:
-        render_dataset_tab(active_case)
-    with history_tab:
-        render_history_tab(session_analyses)
-    with arch_tab:
-        render_architecture_tab(display_config)
     with model_tab:
-        render_model_tab(display_config)
+        render_model_tab()
 
 
 if __name__ == "__main__":
