@@ -995,15 +995,17 @@ def render_history_tab(analyses: list[CaseAnalysis]) -> None:
     )
 
 
+_TOTAL_MEL_TEST = 167
+
 _MODEL_COMPARISON = pd.DataFrame([
-    {"modelo": "ResNet50",       "experimento": "base_224x224", "auc_test": 0.8901, "sensibilidade": 0.8743, "especificidade": 0.7238, "t_low": 0.0762, "t_high": 0.2548, "zona_nao_mel_n": 740,  "zona_nao_mel_mel_count": 8,  "zona_nao_mel_mel_pct": 4.79,  "zona_incerta_n": 248, "zona_incerta_pct_total": 16.50, "zona_incerta_mel_count": 13, "zona_incerta_mel_pct": 7.78,  "zona_mel_n": 515, "zona_mel_mel_count": 146, "zona_mel_mel_pct": 87.43},
-    {"modelo": "EfficientNet-B0","experimento": "base_64x64",   "auc_test": 0.7773, "sensibilidade": 0.8683, "especificidade": 0.4993, "t_low": 0.0000, "t_high": 0.0002, "zona_nao_mel_n": 259,  "zona_nao_mel_mel_count": 5,  "zona_nao_mel_mel_pct": 2.99,  "zona_incerta_n": 430, "zona_incerta_pct_total": 28.61, "zona_incerta_mel_count": 17, "zona_incerta_mel_pct": 10.18, "zona_mel_n": 814, "zona_mel_mel_count": 145, "zona_mel_mel_pct": 86.83},
-    {"modelo": "ResNet50",       "experimento": "aug_224x224",  "auc_test": 0.9128, "sensibilidade": 0.8563, "especificidade": 0.8211, "t_low": 0.1451, "t_high": 0.4432, "zona_nao_mel_n": 781,  "zona_nao_mel_mel_count": 5,  "zona_nao_mel_mel_pct": 2.99,  "zona_incerta_n": 340, "zona_incerta_pct_total": 22.62, "zona_incerta_mel_count": 19, "zona_incerta_mel_pct": 11.38, "zona_mel_n": 382, "zona_mel_mel_count": 143, "zona_mel_mel_pct": 85.63},
-    {"modelo": "EfficientNet-B0","experimento": "aug_224x224",  "auc_test": 0.9035, "sensibilidade": 0.8383, "especificidade": 0.7792, "t_low": 0.0518, "t_high": 0.3005, "zona_nao_mel_n": 809,  "zona_nao_mel_mel_count": 9,  "zona_nao_mel_mel_pct": 5.39,  "zona_incerta_n": 259, "zona_incerta_pct_total": 17.23, "zona_incerta_mel_count": 18, "zona_incerta_mel_pct": 10.78, "zona_mel_n": 435, "zona_mel_mel_count": 140, "zona_mel_mel_pct": 83.83},
-    {"modelo": "EfficientNet-B0","experimento": "aug_64x64",    "auc_test": 0.7577, "sensibilidade": 0.8263, "especificidade": 0.5337, "t_low": 0.0000, "t_high": 0.0015, "zona_nao_mel_n": 365,  "zona_nao_mel_mel_count": 5,  "zona_nao_mel_mel_pct": 2.99,  "zona_incerta_n": 377, "zona_incerta_pct_total": 25.08, "zona_incerta_mel_count": 24, "zona_incerta_mel_pct": 14.37, "zona_mel_n": 761, "zona_mel_mel_count": 138, "zona_mel_mel_pct": 82.63},
-    {"modelo": "ResNet50",       "experimento": "aug_64x64",    "auc_test": 0.8677, "sensibilidade": 0.8263, "especificidade": 0.7403, "t_low": 0.1969, "t_high": 0.4212, "zona_nao_mel_n": 727,  "zona_nao_mel_mel_count": 6,  "zona_nao_mel_mel_pct": 3.59,  "zona_incerta_n": 291, "zona_incerta_pct_total": 19.36, "zona_incerta_mel_count": 23, "zona_incerta_mel_pct": 13.77, "zona_mel_n": 485, "zona_mel_mel_count": 138, "zona_mel_mel_pct": 82.63},
-    {"modelo": "EfficientNet-B0","experimento": "base_224x224", "auc_test": 0.8897, "sensibilidade": 0.8263, "especificidade": 0.7769, "t_low": 0.0003, "t_high": 0.0409, "zona_nao_mel_n": 736,  "zona_nao_mel_mel_count": 7,  "zona_nao_mel_mel_pct": 4.19,  "zona_incerta_n": 331, "zona_incerta_pct_total": 22.02, "zona_incerta_mel_count": 22, "zona_incerta_mel_pct": 13.17, "zona_mel_n": 436, "zona_mel_mel_count": 138, "zona_mel_mel_pct": 82.63},
-    {"modelo": "ResNet50",       "experimento": "base_64x64",   "auc_test": 0.8703, "sensibilidade": 0.8204, "especificidade": 0.7238, "t_low": 0.0798, "t_high": 0.3839, "zona_nao_mel_n": 588,  "zona_nao_mel_mel_count": 3,  "zona_nao_mel_mel_pct": 1.80,  "zona_incerta_n": 409, "zona_incerta_pct_total": 27.21, "zona_incerta_mel_count": 27, "zona_incerta_mel_pct": 16.17, "zona_mel_n": 506, "zona_mel_mel_count": 137, "zona_mel_mel_pct": 82.04},
+    {"modelo": "ResNet50",       "experimento": "base_224x224", "auc_test": 0.8901, "sensibilidade": 0.8743, "especificidade": 0.7238, "fn_critico": 8,  "fn_incerto": 13, "t_low": 0.0762, "t_high": 0.2548, "zona_nao_mel_n": 740,  "zona_nao_mel_mel_count": 8,  "zona_nao_mel_mel_pct": 4.79,  "zona_incerta_n": 248, "zona_incerta_pct_total": 16.50, "zona_incerta_mel_count": 13, "zona_incerta_mel_pct": 7.78,  "zona_mel_n": 515, "zona_mel_mel_count": 146, "zona_mel_mel_pct": 87.43},
+    {"modelo": "EfficientNet-B0","experimento": "base_64x64",   "auc_test": 0.7773, "sensibilidade": 0.8683, "especificidade": 0.4993, "fn_critico": 5,  "fn_incerto": 17, "t_low": 0.0000, "t_high": 0.0002, "zona_nao_mel_n": 259,  "zona_nao_mel_mel_count": 5,  "zona_nao_mel_mel_pct": 2.99,  "zona_incerta_n": 430, "zona_incerta_pct_total": 28.61, "zona_incerta_mel_count": 17, "zona_incerta_mel_pct": 10.18, "zona_mel_n": 814, "zona_mel_mel_count": 145, "zona_mel_mel_pct": 86.83},
+    {"modelo": "ResNet50",       "experimento": "aug_224x224",  "auc_test": 0.9128, "sensibilidade": 0.8563, "especificidade": 0.8211, "fn_critico": 5,  "fn_incerto": 19, "t_low": 0.1451, "t_high": 0.4432, "zona_nao_mel_n": 781,  "zona_nao_mel_mel_count": 5,  "zona_nao_mel_mel_pct": 2.99,  "zona_incerta_n": 340, "zona_incerta_pct_total": 22.62, "zona_incerta_mel_count": 19, "zona_incerta_mel_pct": 11.38, "zona_mel_n": 382, "zona_mel_mel_count": 143, "zona_mel_mel_pct": 85.63},
+    {"modelo": "EfficientNet-B0","experimento": "aug_224x224",  "auc_test": 0.9035, "sensibilidade": 0.8383, "especificidade": 0.7792, "fn_critico": 9,  "fn_incerto": 18, "t_low": 0.0518, "t_high": 0.3005, "zona_nao_mel_n": 809,  "zona_nao_mel_mel_count": 9,  "zona_nao_mel_mel_pct": 5.39,  "zona_incerta_n": 259, "zona_incerta_pct_total": 17.23, "zona_incerta_mel_count": 18, "zona_incerta_mel_pct": 10.78, "zona_mel_n": 435, "zona_mel_mel_count": 140, "zona_mel_mel_pct": 83.83},
+    {"modelo": "EfficientNet-B0","experimento": "aug_64x64",    "auc_test": 0.7577, "sensibilidade": 0.8263, "especificidade": 0.5337, "fn_critico": 5,  "fn_incerto": 24, "t_low": 0.0000, "t_high": 0.0015, "zona_nao_mel_n": 365,  "zona_nao_mel_mel_count": 5,  "zona_nao_mel_mel_pct": 2.99,  "zona_incerta_n": 377, "zona_incerta_pct_total": 25.08, "zona_incerta_mel_count": 24, "zona_incerta_mel_pct": 14.37, "zona_mel_n": 761, "zona_mel_mel_count": 138, "zona_mel_mel_pct": 82.63},
+    {"modelo": "ResNet50",       "experimento": "aug_64x64",    "auc_test": 0.8677, "sensibilidade": 0.8263, "especificidade": 0.7403, "fn_critico": 6,  "fn_incerto": 23, "t_low": 0.1969, "t_high": 0.4212, "zona_nao_mel_n": 727,  "zona_nao_mel_mel_count": 6,  "zona_nao_mel_mel_pct": 3.59,  "zona_incerta_n": 291, "zona_incerta_pct_total": 19.36, "zona_incerta_mel_count": 23, "zona_incerta_mel_pct": 13.77, "zona_mel_n": 485, "zona_mel_mel_count": 138, "zona_mel_mel_pct": 82.63},
+    {"modelo": "EfficientNet-B0","experimento": "base_224x224", "auc_test": 0.8897, "sensibilidade": 0.8263, "especificidade": 0.7769, "fn_critico": 7,  "fn_incerto": 22, "t_low": 0.0003, "t_high": 0.0409, "zona_nao_mel_n": 736,  "zona_nao_mel_mel_count": 7,  "zona_nao_mel_mel_pct": 4.19,  "zona_incerta_n": 331, "zona_incerta_pct_total": 22.02, "zona_incerta_mel_count": 22, "zona_incerta_mel_pct": 13.17, "zona_mel_n": 436, "zona_mel_mel_count": 138, "zona_mel_mel_pct": 82.63},
+    {"modelo": "ResNet50",       "experimento": "base_64x64",   "auc_test": 0.8703, "sensibilidade": 0.8204, "especificidade": 0.7238, "fn_critico": 3,  "fn_incerto": 27, "t_low": 0.0798, "t_high": 0.3839, "zona_nao_mel_n": 588,  "zona_nao_mel_mel_count": 3,  "zona_nao_mel_mel_pct": 1.80,  "zona_incerta_n": 409, "zona_incerta_pct_total": 27.21, "zona_incerta_mel_count": 27, "zona_incerta_mel_pct": 16.17, "zona_mel_n": 506, "zona_mel_mel_count": 137, "zona_mel_mel_pct": 82.04},
 ])
 _DEPLOYED_MODEL = ("EfficientNet-B0", "aug_224x224")
 
@@ -1012,41 +1014,59 @@ def render_model_tab() -> None:
     st.markdown("**Comparacao de modelos — sistema de 3 zonas no conjunto de teste**")
 
     df = _MODEL_COMPARISON.copy().sort_values("auc_test", ascending=False).reset_index(drop=True)
+    df["fn_total"]     = df["fn_critico"] + df["fn_incerto"]
+    df["pct_fn_total"] = df["fn_total"] / _TOTAL_MEL_TEST * 100
 
-    # Marca o modelo implantado
     deployed_mask = (df["modelo"] == _DEPLOYED_MODEL[0]) & (df["experimento"] == _DEPLOYED_MODEL[1])
 
+    cols_display = [
+        "modelo", "experimento",
+        "auc_test", "sensibilidade", "especificidade",
+        "fn_critico", "fn_incerto", "fn_total", "pct_fn_total",
+        "zona_mel_mel_pct", "zona_nao_mel_mel_pct",
+        "zona_incerta_pct_total",
+        "t_low", "t_high",
+    ]
+
     styled = (
-        df.style
+        df[cols_display].style
         .format({
-            "auc_test":                "{:.4f}",
-            "sensibilidade":           "{:.1%}",
-            "especificidade":          "{:.1%}",
-            "t_low":                   "{:.4f}",
-            "t_high":                  "{:.4f}",
-            "zona_nao_mel_mel_pct":    "{:.2f}%",
-            "zona_incerta_pct_total":  "{:.2f}%",
-            "zona_incerta_mel_pct":    "{:.2f}%",
-            "zona_mel_mel_pct":        "{:.2f}%",
+            "auc_test":               "{:.4f}",
+            "sensibilidade":          "{:.1%}",
+            "especificidade":         "{:.1%}",
+            "fn_critico":             "{:.0f}",
+            "fn_incerto":             "{:.0f}",
+            "fn_total":               "{:.0f}",
+            "pct_fn_total":           "{:.1f}%",
+            "zona_mel_mel_pct":       "{:.2f}%",
+            "zona_nao_mel_mel_pct":   "{:.2f}%",
+            "zona_incerta_pct_total": "{:.2f}%",
+            "t_low":                  "{:.4f}",
+            "t_high":                 "{:.4f}",
         })
         .apply(
             lambda row: ["background-color:#dcfce7; font-weight:700" if deployed_mask.iloc[row.name] else "" for _ in row],
             axis=1,
         )
-        .bar(subset=["auc_test"],          color="#bfdbfe", vmin=0.75, vmax=0.92)
-        .bar(subset=["sensibilidade"],     color="#bbf7d0", vmin=0.80, vmax=0.90)
-        .bar(subset=["especificidade"],    color="#e9d5ff", vmin=0.45, vmax=0.85)
-        .bar(subset=["zona_mel_mel_pct"],  color="#fde68a", vmin=80,   vmax=90)
-        .bar(subset=["zona_nao_mel_mel_pct"], color="#fecaca", vmin=0, vmax=6)
+        .bar(subset=["auc_test"],             color="#bfdbfe", vmin=0.75, vmax=0.92)
+        .bar(subset=["sensibilidade"],        color="#bbf7d0", vmin=0.80, vmax=0.90)
+        .bar(subset=["especificidade"],       color="#e9d5ff", vmin=0.45, vmax=0.85)
+        .bar(subset=["fn_total"],             color="#fca5a5", vmin=20,   vmax=32)
+        .bar(subset=["fn_critico"],           color="#f87171", vmin=0,    vmax=10)
+        .bar(subset=["zona_mel_mel_pct"],     color="#fde68a", vmin=80,   vmax=90)
+        .bar(subset=["zona_nao_mel_mel_pct"], color="#fecaca", vmin=0,    vmax=6)
     )
 
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
     st.caption(
-        "Verde = modelo implantado (EfficientNet-B0 aug_224x224). "
-        "Barra azul = AUC · Barra verde = Sensibilidade (recall) · Barra lilas = Especificidade. "
-        "Barra amarela = % melanomas capturados na zona positiva. "
-        "Barra vermelha = % melanomas perdidos na zona negativa (falsos negativos criticos)."
+        f"Total de melanomas no conjunto de teste: {_TOTAL_MEL_TEST}. "
+        "Verde = modelo implantado. "
+        "fn_critico = melanomas classificados como baixo risco (pior erro). "
+        "fn_incerto = melanomas na zona de revisao. "
+        "fn_total = soma dos dois. "
+        "Barra azul = AUC · verde = Sensibilidade · lilas = Especificidade · "
+        "rosa escuro = FN total · rosa claro = FN critico."
     )
 
 
