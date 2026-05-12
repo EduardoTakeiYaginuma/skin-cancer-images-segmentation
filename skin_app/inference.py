@@ -463,6 +463,16 @@ class SkinCancerPredictor:
         model.to(self.device)
         return model
 
+    def _gradcam_target_layer(self) -> nn.Module:
+        """Return the last feature-map layer for GradCAM, architecture-agnostic."""
+        if hasattr(self.model, "conv_head"):
+            return self.model.conv_head
+        if hasattr(self.model, "layer4"):
+            return self.model.layer4[-1]
+        if hasattr(self.model, "blocks"):
+            return self.model.blocks[-1]
+        raise AttributeError(f"Cannot find GradCAM target layer for {type(self.model).__name__}")
+
     def _load_segmentation_model(self) -> SegmentationUNet | None:
         if not self.seg_checkpoint_rel:
             return None
@@ -672,8 +682,9 @@ class SkinCancerPredictor:
             del grad_input
             gradients.append(grad_output[0])
 
-        handle_forward = self.model.conv_head.register_forward_hook(forward_hook)
-        handle_backward = self.model.conv_head.register_full_backward_hook(backward_hook)
+        target_layer = self._gradcam_target_layer()
+        handle_forward = target_layer.register_forward_hook(forward_hook)
+        handle_backward = target_layer.register_full_backward_hook(backward_hook)
 
         self.model.zero_grad(set_to_none=True)
         logits = self.model(batch).squeeze()

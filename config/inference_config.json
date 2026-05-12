@@ -1,29 +1,21 @@
 {
-  "model_name": "efficientnet_b0",
-  "checkpoint_path": "outputs/models/model_comparison/efficientnet_b0_base_224x224_calibrated.pt",
+  "model_name": "resnet50",
+  "checkpoint_path": "outputs/models/model_comparison/resnet50_aug_224x224.pt",
   "image_size": 224,
   "normalization": {
-    "mean": [
-      0.751364,
-      0.518854,
-      0.539356
-    ],
-    "std": [
-      0.142365,
-      0.163025,
-      0.181591
-    ]
+    "mean": [0.754061, 0.525300, 0.547224],
+    "std":  [0.144153, 0.163992, 0.184668]
   },
   "thresholds": {
-    "t_low": 0.003779,
-    "t_high": 0.220775
+    "t_low": 0.007984,
+    "t_high": 0.158902
   },
   "metrics": {
-    "auc": 0.9015,
-    "sensitivity": 0.9042,
-    "specificity": 0.7433,
-    "precision": 0.3057,
-    "f1": 0.4569
+    "auc": 0.8941,
+    "sensitivity": 0.8623,
+    "specificity": 0.7807,
+    "precision": null,
+    "f1": null
   },
   "segmentation": {
     "checkpoint_path": "outputs/models/unet_segmentation.pt",

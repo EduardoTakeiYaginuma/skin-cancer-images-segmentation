@@ -1,0 +1,14 @@
+# Dependências mínimas para o Lambda handler (inferência).
+# Sem scikit-learn, scipy, mlflow, fastapi, feast — apenas o que a inferência usa.
+
+# Core ML
+numpy>=1.26,<2
+pandas>=1.4,<3
+Pillow>=9.0
+opencv-python-headless>=4.10,<5
+timm>=1.0
+PyYAML>=6.0
+
+# Logging / Env
+python-json-logger>=2.0
+python-dotenv>=1.0
