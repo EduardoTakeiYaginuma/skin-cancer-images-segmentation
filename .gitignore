@@ -88,3 +88,23 @@ outputs/models/
 
 
 data/*
+
+# MLflow
+mlruns/
+mlflow.db
+
+# DVC cache and temp (not config files)
+.dvc/cache/
+.dvc/tmp/
+
+# Virtual env
+venv/
+
+# Deploy secrets
+*.pem
+.env
+
+# Temp uploads
+*.jpg
+*.jpeg
+*.png

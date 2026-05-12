@@ -17,6 +17,74 @@ CONFIG_PATH = ROOT_DIR / "config" / "inference_config.json"
 MODEL_FIG_DIR = ROOT_DIR / "outputs" / "figures" / "modeling_2"
 APP_BUILD_ID = "2026-05-05-rich-demo-v2"
 
+_DEFAULT_THRESHOLDS = {"t_low": 0.10, "t_high": 0.50}
+
+MODEL_REGISTRY: dict[str, dict] = {
+    "EfficientNet-B0 · calibrado 224×224 (padrão)": {
+        "model_name": "efficientnet_b0",
+        "checkpoint_path": "outputs/models/model_comparison/efficientnet_b0_base_224x224_calibrated.pt",
+        "image_size": 224,
+        "thresholds": {"t_low": 0.003779, "t_high": 0.220775},
+        "metrics": {"auc": 0.9015, "sensitivity": 0.9042, "specificity": 0.7433, "precision": 0.3057, "f1": 0.4569},
+    },
+    "EfficientNet-B0 · base 224×224": {
+        "model_name": "efficientnet_b0",
+        "checkpoint_path": "outputs/models/model_comparison/efficientnet_b0_base_224x224.pt",
+        "image_size": 224,
+        "thresholds": {"t_low": 0.000276, "t_high": 0.040930},
+        "metrics": {"auc": 0.8897, "sensitivity": 0.8263, "specificity": 0.7769, "precision": None, "f1": None},
+    },
+    "EfficientNet-B0 · aug 224×224": {
+        "model_name": "efficientnet_b0",
+        "checkpoint_path": "outputs/models/model_comparison/efficientnet_b0_aug_224x224.pt",
+        "image_size": 224,
+        "thresholds": {"t_low": 0.051789, "t_high": 0.300460},
+        "metrics": {"auc": 0.9035, "sensitivity": 0.8383, "specificity": 0.7792, "precision": None, "f1": None},
+    },
+    "EfficientNet-B0 · base 64×64": {
+        "model_name": "efficientnet_b0",
+        "checkpoint_path": "outputs/models/model_comparison/efficientnet_b0_base_64x64.pt",
+        "image_size": 64,
+        "thresholds": {"t_low": 0.000000, "t_high": 0.000184},
+        "metrics": {"auc": 0.7773, "sensitivity": 0.8683, "specificity": 0.4993, "precision": None, "f1": None},
+    },
+    "EfficientNet-B0 · aug 64×64": {
+        "model_name": "efficientnet_b0",
+        "checkpoint_path": "outputs/models/model_comparison/efficientnet_b0_aug_64x64.pt",
+        "image_size": 64,
+        "thresholds": {"t_low": 0.000000, "t_high": 0.001453},
+        "metrics": {"auc": 0.7577, "sensitivity": 0.8263, "specificity": 0.5337, "precision": None, "f1": None},
+    },
+    "ResNet50 · base 224×224": {
+        "model_name": "resnet50",
+        "checkpoint_path": "outputs/models/model_comparison/resnet50_base_224x224.pt",
+        "image_size": 224,
+        "thresholds": {"t_low": 0.076230, "t_high": 0.254756},
+        "metrics": {"auc": 0.8901, "sensitivity": 0.8743, "specificity": 0.7238, "precision": None, "f1": None},
+    },
+    "ResNet50 · aug 224×224": {
+        "model_name": "resnet50",
+        "checkpoint_path": "outputs/models/model_comparison/resnet50_aug_224x224.pt",
+        "image_size": 224,
+        "thresholds": {"t_low": 0.145128, "t_high": 0.443170},
+        "metrics": {"auc": 0.9128, "sensitivity": 0.8563, "specificity": 0.8211, "precision": None, "f1": None},
+    },
+    "ResNet50 · base 64×64": {
+        "model_name": "resnet50",
+        "checkpoint_path": "outputs/models/model_comparison/resnet50_base_64x64.pt",
+        "image_size": 64,
+        "thresholds": {"t_low": 0.079838, "t_high": 0.383903},
+        "metrics": {"auc": 0.8703, "sensitivity": 0.8204, "specificity": 0.7238, "precision": None, "f1": None},
+    },
+    "ResNet50 · aug 64×64": {
+        "model_name": "resnet50",
+        "checkpoint_path": "outputs/models/model_comparison/resnet50_aug_64x64.pt",
+        "image_size": 64,
+        "thresholds": {"t_low": 0.196864, "t_high": 0.421216},
+        "metrics": {"auc": 0.8677, "sensitivity": 0.8263, "specificity": 0.7403, "precision": None, "f1": None},
+    },
+}
+
 ZONE_STYLES = {
     "negative": {
         "accent": "#1d4ed8",
@@ -37,8 +105,15 @@ ZONE_STYLES = {
 
 
 @st.cache_resource
-def load_predictor(build_id: str) -> SkinCancerPredictor:
-    return SkinCancerPredictor(config_path=CONFIG_PATH)
+def load_predictor(model_key: str) -> SkinCancerPredictor:
+    reg = MODEL_REGISTRY[model_key]
+    overrides = {
+        "model_name": reg["model_name"],
+        "checkpoint_path": reg["checkpoint_path"],
+        "image_size": reg["image_size"],
+        "thresholds": {"t_low": reg["thresholds"]["t_low"], "t_high": reg["thresholds"]["t_high"]},
+    }
+    return SkinCancerPredictor(config_path=CONFIG_PATH, model_overrides=overrides)
 
 
 @st.cache_data
@@ -47,11 +122,32 @@ def load_config() -> dict:
         return json.load(fp)
 
 
+def _clear_analysis_cache() -> None:
+    st.session_state.analysis_cache = {}
+    st.session_state.analysis_order = []
+    st.session_state.prev_file_hashes = set()
+    st.session_state.experiment_meta = {}
+    st.session_state.cache_to_content = {}
+    st.session_state.saved_experiments = []
+
+
 def ensure_state() -> None:
     if "analysis_cache" not in st.session_state:
         st.session_state.analysis_cache = {}
     if "analysis_order" not in st.session_state:
         st.session_state.analysis_order = []
+    if "active_model_key" not in st.session_state:
+        st.session_state.active_model_key = next(iter(MODEL_REGISTRY))
+    if "prev_file_hashes" not in st.session_state:
+        st.session_state.prev_file_hashes = set()
+    if "last_remove_hair" not in st.session_state:
+        st.session_state.last_remove_hair = True
+    if "experiment_meta" not in st.session_state:
+        st.session_state.experiment_meta = {}
+    if "cache_to_content" not in st.session_state:
+        st.session_state.cache_to_content = {}
+    if "saved_experiments" not in st.session_state:
+        st.session_state.saved_experiments = []
 
 
 def add_analysis_to_state(analysis: CaseAnalysis) -> None:
@@ -95,12 +191,16 @@ def render_styles() -> None:
             margin: 0;
             font-size: 2.2rem;
             line-height: 1.05;
+            color: #f8fafc !important;
           }
           .hero-shell p {
             margin: 0.55rem 0 0 0;
             max-width: 52rem;
             font-size: 1rem;
-            color: rgba(248,250,252,0.82);
+            color: rgba(248,250,252,0.82) !important;
+          }
+          .hero-shell span, .hero-shell div {
+            color: inherit !important;
           }
           .metric-card {
             border-radius: 22px;
@@ -198,6 +298,7 @@ def render_styles() -> None:
             font-weight: 700;
             font-size: 0.78rem;
           }
+          /* --- tabs --- */
           div[data-testid="stTabs"] button[role="tab"] p {
             color: #334155 !important;
             font-weight: 600;
@@ -205,6 +306,102 @@ def render_styles() -> None:
           div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] p {
             color: #0f172a !important;
             font-weight: 700;
+          }
+
+          /* --- labels de todos os widgets --- */
+          div[data-testid] > label,
+          div[data-testid] > label p,
+          div[data-testid] > label span {
+            color: #0f172a !important;
+          }
+
+          /* --- selectbox: valor selecionado e opcoes --- */
+          [data-baseweb="select"],
+          [data-baseweb="select"] *,
+          [data-baseweb="select"] span,
+          [data-baseweb="select"] div,
+          [data-baseweb="select"] p,
+          [data-baseweb="select"] input {
+            color: #0f172a !important;
+            background-color: transparent;
+          }
+          [data-baseweb="select"] > div {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+          }
+          [data-baseweb="popover"],
+          [data-baseweb="popover"] ul,
+          [data-baseweb="popover"] li {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+          }
+          [data-baseweb="popover"] [role="option"],
+          [data-baseweb="popover"] [role="option"] * {
+            color: #0f172a !important;
+            background-color: #ffffff !important;
+          }
+          [data-baseweb="popover"] [role="option"]:hover,
+          [data-baseweb="popover"] [aria-selected="true"] {
+            background-color: #f1f5f9 !important;
+          }
+
+          /* --- file uploader --- */
+          [data-testid="stFileUploaderDropzone"] span,
+          [data-testid="stFileUploaderDropzone"] p,
+          [data-testid="stFileUploaderDropzone"] small {
+            color: #475569 !important;
+          }
+          [data-testid="stFileUploaderFile"] span,
+          [data-testid="stFileUploaderFile"] p {
+            color: #0f172a !important;
+          }
+
+          /* --- toggle --- */
+          [data-testid="stToggle"] p,
+          [data-testid="stToggle"] span {
+            color: #0f172a !important;
+          }
+
+          /* --- status / expander --- */
+          [data-testid="stExpander"] summary p,
+          [data-testid="stExpander"] summary span {
+            color: #0f172a !important;
+          }
+          [data-testid="stStatusWidget"],
+          [data-testid="stStatusWidget"] *,
+          [data-testid="stStatusWidget"] p,
+          [data-testid="stStatusWidget"] span,
+          [data-testid="stStatusWidget"] div,
+          [data-testid="stStatusWidget"] label,
+          [data-testid="stStatusWidget"] summary,
+          [data-testid="stStatusWidget"] summary * {
+            color: #0f172a !important;
+          }
+          /* st.status() running / complete label */
+          div[data-testid="stStatus"],
+          div[data-testid="stStatus"] *,
+          details[data-testid],
+          details[data-testid] summary,
+          details[data-testid] summary * {
+            color: #0f172a !important;
+          }
+
+          /* --- sidebar --- */
+          [data-testid="stSidebar"],
+          [data-testid="stSidebarContent"],
+          [data-testid="stSidebar"] *,
+          [data-testid="stSidebarContent"] *,
+          [data-testid="stSidebar"] p,
+          [data-testid="stSidebar"] span,
+          [data-testid="stSidebar"] label,
+          [data-testid="stSidebar"] h1,
+          [data-testid="stSidebar"] h2,
+          [data-testid="stSidebar"] h3,
+          [data-testid="stSidebar"] h4,
+          [data-testid="stSidebar"] small,
+          [data-testid="stSidebar"] [data-baseweb="select"] span,
+          [data-testid="stSidebar"] [data-baseweb="select"] div {
+            color: #ffffff !important;
           }
         </style>
         """,
@@ -246,21 +443,37 @@ def compute_percentile(value: float, values: list[float]) -> float | None:
     return (rank / len(values)) * 100
 
 
-def render_top_metrics(config: dict) -> None:
+def render_top_metrics(model_key: str) -> None:
+    reg = MODEL_REGISTRY[model_key]
+    metrics = reg.get("metrics")
+    t_high = reg["thresholds"]["t_high"]
+    t_low = reg["thresholds"]["t_low"]
+    na = "n/d"
     cols = st.columns(6)
-    metrics = config["metrics"]
     with cols[0]:
-        render_metric_card("AUC", f'{metrics["auc"]:.4f}', "EfficientNet-B0 calibrado")
+        render_metric_card("AUC", f'{metrics["auc"]:.4f}' if metrics else na, reg["model_name"])
+    _pct = lambda v: f'{v * 100:.1f}%' if v is not None else na
+    _f4  = lambda v: f'{v:.4f}'        if v is not None else na
     with cols[1]:
-        render_metric_card("Sensibilidade", f'{metrics["sensitivity"] * 100:.1f}%', "Meta clinica priorizando melanoma")
+        render_metric_card("Sensibilidade", _pct(metrics["sensitivity"]) if metrics else na, "Meta clinica priorizando melanoma")
     with cols[2]:
-        render_metric_card("Especificidade", f'{metrics["specificity"] * 100:.1f}%', "Controle de falso positivo")
+        render_metric_card("Especificidade", _pct(metrics["specificity"]) if metrics else na, "Controle de falso positivo")
     with cols[3]:
-        render_metric_card("F1", f'{metrics["f1"]:.4f}', "Equilibrio entre precisao e recall")
+        render_metric_card("F1", _f4(metrics["f1"]) if metrics else na, "Equilibrio entre precisao e recall")
     with cols[4]:
-        render_metric_card("Precisao", f'{metrics["precision"] * 100:.1f}%', "Proporcao de alertas corretos")
+        render_metric_card("Precisao", _pct(metrics["precision"]) if metrics else na, "Proporcao de alertas corretos")
     with cols[5]:
-        render_metric_card("T_HIGH", f'{config["thresholds"]["t_high"]:.4f}', "Threshold operacional de alerta")
+        render_metric_card("T_HIGH", f'{t_high:.4f}', f"T_LOW = {t_low:.4f}")
+
+
+def _risk_visual_pos(p: float, t_low: float, t_high: float) -> float:
+    """Map probability to visual bar position (0-100%) with equal-width zones."""
+    p = max(0.0, min(p, 1.0))
+    if p < t_low:
+        return (p / max(t_low, 1e-9)) * 100.0 / 3.0
+    if p < t_high:
+        return 100.0 / 3.0 + (p - t_low) / max(t_high - t_low, 1e-9) * 100.0 / 3.0
+    return 200.0 / 3.0 + (p - t_high) / max(1.0 - t_high, 1e-9) * 100.0 / 3.0
 
 
 def render_risk_bar(case: CaseAnalysis) -> None:
@@ -268,6 +481,21 @@ def render_risk_bar(case: CaseAnalysis) -> None:
     probability = max(0.0, min(result.probability, 1.0))
     t_low = result.threshold_low
     t_high = result.threshold_high
+    zone_key = result.zone_key
+    zone_colors = {
+        "negative": "#1d4ed8",
+        "review": "#f59e0b",
+        "positive": "#dc2626",
+    }
+    zone_labels = {
+        "negative": "Baixo risco",
+        "review": "Revisao",
+        "positive": "Alerta alto",
+    }
+    marker_color = zone_colors.get(zone_key, "#0f172a")
+    zone_label = zone_labels.get(zone_key, "Revisao")
+    visual_pos = _risk_visual_pos(probability, t_low, t_high)
+    marker_left = max(0.5, min(visual_pos, 99.0))
     st.markdown(
         f"""
         <div class="risk-shell">
@@ -275,21 +503,31 @@ def render_risk_bar(case: CaseAnalysis) -> None:
             <span style="font-weight:700;color:#0f172a;">Probabilidade prevista de melanoma</span>
             <span style="font-weight:800;color:#0f172a;">{probability * 100:.2f}%</span>
           </div>
+          <div style="margin-top:0.45rem;font-size:0.82rem;color:{marker_color};font-weight:800;letter-spacing:0.04em;text-transform:uppercase;">
+            {zone_label}
+          </div>
           <div style="position:relative;margin-top:0.9rem;height:20px;border-radius:999px;overflow:hidden;background:#e2e8f0;">
-            <div style="position:absolute;left:0;top:0;height:100%;width:{t_low * 100:.2f}%;background:#60a5fa;"></div>
-            <div style="position:absolute;left:{t_low * 100:.2f}%;top:0;height:100%;width:{(t_high - t_low) * 100:.2f}%;background:#fbbf24;"></div>
-            <div style="position:absolute;left:{t_high * 100:.2f}%;top:0;height:100%;width:{(1 - t_high) * 100:.2f}%;background:#ef4444;"></div>
-            <div style="position:absolute;left:calc({probability * 100:.2f}% - 9px);top:1px;width:18px;height:18px;border-radius:50%;
-                        background:#0f172a;border:3px solid #fff;box-shadow:0 8px 18px rgba(15,23,42,0.24);"></div>
+            <div style="position:absolute;left:0;top:0;height:100%;width:33.33%;
+                        background:linear-gradient(90deg,#1d4ed8 0%,#60a5fa 100%);"></div>
+            <div style="position:absolute;left:33.33%;top:0;height:100%;width:33.34%;background:#fbbf24;"></div>
+            <div style="position:absolute;left:66.67%;top:0;height:100%;width:33.33%;
+                        background:linear-gradient(90deg,#f87171 0%,#dc2626 70%,#991b1b 100%);"></div>
+            <div style="position:absolute;left:calc({marker_left:.2f}% - 10px);top:0;width:20px;height:20px;border-radius:50%;
+                        background:{marker_color};border:3px solid #fff;box-shadow:0 10px 20px rgba(15,23,42,0.25);z-index:2;"></div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:0.65rem;font-size:0.88rem;color:#334155;">
-            <span>Baixo risco</span>
-            <span>Revisao</span>
-            <span>Alerta</span>
+            <span style="color:#1d4ed8;font-weight:600;">Baixo risco</span>
+            <span style="color:#b45309;font-weight:600;">Revisao</span>
+            <span style="color:#dc2626;font-weight:600;">Alerta</span>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-top:0.5rem;font-size:0.86rem;color:#475569;">
-            <span>T_LOW = {t_low:.6f}</span>
-            <span>T_HIGH = {t_high:.6f}</span>
+          <div style="display:flex;justify-content:space-between;margin-top:0.4rem;font-size:0.82rem;color:#64748b;">
+            <span>0%</span>
+            <span>T_LOW = {t_low * 100:.4f}%</span>
+            <span>T_HIGH = {t_high * 100:.4f}%</span>
+            <span>100%</span>
+          </div>
+          <div style="margin-top:0.35rem;font-size:0.78rem;color:#94a3b8;font-style:italic;">
+            Escala visual com zonas de tamanho igual; eixo linear real mostrado acima.
           </div>
         </div>
         """,
@@ -307,19 +545,60 @@ _PIPELINE_STEPS = [
 ]
 
 
-def collect_with_live_preview(uploaded_files: list, predictor: SkinCancerPredictor) -> list[CaseAnalysis]:
-    current_case_ids: list[str] = []
-    for uploaded_file in uploaded_files:
-        file_bytes = uploaded_file.getvalue()
-        case_id = hashlib.sha1(
-            f"{uploaded_file.name}:{len(file_bytes)}".encode("utf-8") + file_bytes
+def collect_with_live_preview(
+    uploaded_files: list,
+    predictor: SkinCancerPredictor,
+    remove_hair: bool = True,
+    model_key: str = "",
+) -> list[CaseAnalysis]:
+    # Cache key = content + model + remove_hair so each distinct experiment gets its own entry
+    # content_key = content only (no model, no remove_hair) so we can group experiments for the same image
+    file_entries: list[tuple[str, bytes, str, str]] = []
+    for f in uploaded_files:
+        b = f.getvalue()
+        hair_flag = "1" if remove_hair else "0"
+        k = hashlib.sha1(
+            f"{f.name}:{len(b)}:{model_key}:{hair_flag}".encode("utf-8") + b
         ).hexdigest()[:12]
+        ck = hashlib.sha1(
+            f"{f.name}:{len(b)}".encode("utf-8") + b
+        ).hexdigest()[:12]
+        file_entries.append((k, b, f.name, ck))
 
-        if case_id in st.session_state.analysis_cache:
-            current_case_ids.append(case_id)
+    current_key_set = {k for k, _, _, _ in file_entries}
+    prev_key_set: set[str] = st.session_state.prev_file_hashes
+    newly_added = current_key_set - prev_key_set
+
+    # Always update for the next render
+    st.session_state.prev_file_hashes = current_key_set
+
+    current_case_ids: list[str] = []
+    for cache_key, file_bytes, file_name, content_key in file_entries:
+        # File was already in uploader last render AND is cached → keep result unchanged
+        if cache_key not in newly_added and cache_key in st.session_state.analysis_cache:
+            # ensure meta exists for entries pre-dating this feature
+            if cache_key not in st.session_state.cache_to_content:
+                st.session_state.cache_to_content[cache_key] = content_key
+                st.session_state.experiment_meta[cache_key] = {
+                    "model_key": model_key,
+                    "remove_hair": remove_hair,
+                    "content_key": content_key,
+                }
+            current_case_ids.append(cache_key)
             continue
 
-        with st.status(f"Processando {uploaded_file.name}...", expanded=True) as status:
+        # File was already in uploader last render but NOT cached → don't auto-reprocess
+        if cache_key not in newly_added:
+            continue
+
+        # File is newly added to the uploader → process with current settings
+        # (remove stale cache entry if it exists from a previous session)
+        if cache_key in st.session_state.analysis_cache:
+            del st.session_state.analysis_cache[cache_key]
+            if cache_key in st.session_state.analysis_order:
+                st.session_state.analysis_order.remove(cache_key)
+
+        with st.status(f"Processando {file_name}...", expanded=True) as status:
             st.markdown("**Pipeline de pre-processamento ao vivo**")
             cols = st.columns(len(_PIPELINE_STEPS), gap="small")
             placeholders = [col.empty() for col in cols]
@@ -344,20 +623,29 @@ def collect_with_live_preview(uploaded_files: list, predictor: SkinCancerPredict
 
             analysis = predictor.analyze_upload(
                 file_bytes,
-                uploaded_file.name,
+                file_name,
                 on_step=make_on_step(placeholders, progress_msg),
+                remove_hair=remove_hair,
             )
             progress_msg.empty()
             status.update(
-                label=f"{uploaded_file.name} — {analysis.prediction.zone_label} ({analysis.prediction.probability * 100:.1f}%)",
+                label=f"{file_name} — {analysis.prediction.zone_label} ({analysis.prediction.probability * 100:.1f}%)",
                 state="complete",
                 expanded=False,
             )
 
-        add_analysis_to_state(analysis)
-        current_case_ids.append(analysis.case_id)
+        st.session_state.analysis_cache[cache_key] = analysis
+        if cache_key not in st.session_state.analysis_order:
+            st.session_state.analysis_order.append(cache_key)
+        st.session_state.cache_to_content[cache_key] = content_key
+        st.session_state.experiment_meta[cache_key] = {
+            "model_key": model_key,
+            "remove_hair": remove_hair,
+            "content_key": content_key,
+        }
+        current_case_ids.append(cache_key)
 
-    return [st.session_state.analysis_cache[cid] for cid in current_case_ids]
+    return [st.session_state.analysis_cache[cid] for cid in current_case_ids if cid in st.session_state.analysis_cache]
 
 
 def collect_uploaded_analyses(uploaded_files: list, predictor: SkinCancerPredictor) -> list[CaseAnalysis]:
@@ -706,8 +994,9 @@ def render_history_tab(analyses: list[CaseAnalysis]) -> None:
 def render_model_tab(config: dict) -> None:
     st.markdown("**Resumo do experimento implantado**")
     st.write(
-        "A aplicacao usa o checkpoint calibrado do EfficientNet-B0 com thresholds clinicos em tres zonas, "
-        "somado a um U-Net de segmentacao para enriquecer o contexto visual e ajudar no recorte da lesao."
+        f"Modelo ativo: **{config.get('model_name', 'n/d')}** | "
+        f"Imagem de entrada: {config.get('image_size', 'n/d')}×{config.get('image_size', 'n/d')} px. "
+        "Pipeline: U-Net de segmentacao → crop centrado na lesao → classificador → sistema de 3 zonas."
     )
     details_cols = st.columns(3)
     details_cols[0].write(f"Checkpoint: {config['checkpoint_path']}")
@@ -1004,12 +1293,13 @@ def render_architecture_tab(config: dict) -> None:
     st.markdown("")
     st.markdown("**Desempenho do modelo no conjunto de teste (HAM10000)**")
     m_cols = st.columns(5)
+    _fmt = lambda v, fmt: fmt.format(v) if v is not None else "n/d"
     for col, (label, val) in zip(m_cols, [
-        ("AUC",          f'{metrics["auc"]:.4f}'),
-        ("Sensibilidade",f'{metrics["sensitivity"]*100:.1f}%'),
-        ("Especificidade",f'{metrics["specificity"]*100:.1f}%'),
-        ("F1",           f'{metrics["f1"]:.4f}'),
-        ("Precisão",     f'{metrics["precision"]*100:.1f}%'),
+        ("AUC",          _fmt(metrics.get("auc"), "{:.4f}")),
+        ("Sensibilidade",_fmt(metrics.get("sensitivity"), "{:.1%}")),
+        ("Especificidade",_fmt(metrics.get("specificity"), "{:.1%}")),
+        ("F1",           _fmt(metrics.get("f1"), "{:.4f}")),
+        ("Precisão",     _fmt(metrics.get("precision"), "{:.1%}")),
     ]):
         col.markdown(
             f'<div style="border-radius:12px;padding:0.7rem 0.8rem;background:#f8fafc;'
@@ -1025,6 +1315,68 @@ def render_architecture_tab(config: dict) -> None:
     st.caption(
         "Ferramenta desenvolvida para fins acadêmicos (Insper — AI in Medicine). "
         "Não substitui avaliação dermatológica clínica."
+    )
+
+
+def render_experiment_comparison(active_cache_key: str) -> None:
+    content_key = st.session_state.cache_to_content.get(active_cache_key)
+    if not content_key:
+        return
+    saved = st.session_state.saved_experiments
+    related = [
+        k for k in saved
+        if st.session_state.cache_to_content.get(k) == content_key
+        and k in st.session_state.analysis_cache
+    ]
+    if not related:
+        return
+    order_map = {k: i for i, k in enumerate(st.session_state.analysis_order)}
+    related.sort(key=lambda k: order_map.get(k, 999))
+
+    zone_colors = {"negative": "#1d4ed8", "review": "#b45309", "positive": "#b91c1c"}
+    rows_html = ""
+    for i, k in enumerate(related):
+        meta = st.session_state.experiment_meta.get(k, {})
+        analysis = st.session_state.analysis_cache[k]
+        pred = analysis.prediction
+        zone_color = zone_colors.get(pred.zone_key, "#0f172a")
+        hair_label = "Sim" if meta.get("remove_hair", True) else "Nao"
+        model_label = meta.get("model_key", "desconhecido")
+        row_bg = "background:#f1f5f9;" if k == active_cache_key else ""
+        rows_html += (
+            f'<tr style="{row_bg}">'
+            f'<td style="padding:0.5rem 0.7rem;color:#64748b;font-size:0.88rem;">{i + 1}</td>'
+            f'<td style="padding:0.5rem 0.7rem;color:#0f172a;font-size:0.88rem;">{model_label}</td>'
+            f'<td style="padding:0.5rem 0.7rem;color:#0f172a;font-size:0.88rem;">{hair_label}</td>'
+            f'<td style="padding:0.5rem 0.7rem;">'
+            f'<span style="color:{zone_color};font-weight:700;font-size:0.88rem;">{pred.zone_label}</span>'
+            f'</td>'
+            f'</tr>'
+        )
+
+    st.markdown(
+        f"""
+        <div style="border-radius:18px;padding:1rem 1.1rem;background:rgba(255,255,255,0.88);
+                    border:1px solid rgba(15,23,42,0.08);box-shadow:0 8px 24px rgba(15,23,42,0.05);
+                    margin-bottom:1rem;">
+          <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
+                      color:#64748b;margin-bottom:0.7rem;">Comparacao de experimentos — mesma imagem</div>
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="border-bottom:1px solid #e2e8f0;">
+                <th style="padding:0.4rem 0.7rem;text-align:left;font-size:0.78rem;color:#64748b;font-weight:600;">#</th>
+                <th style="padding:0.4rem 0.7rem;text-align:left;font-size:0.78rem;color:#64748b;font-weight:600;">Modelo</th>
+                <th style="padding:0.4rem 0.7rem;text-align:left;font-size:0.78rem;color:#64748b;font-weight:600;">Remocao pelos</th>
+                <th style="padding:0.4rem 0.7rem;text-align:left;font-size:0.78rem;color:#64748b;font-weight:600;">Zona</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows_html}
+            </tbody>
+          </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
 
@@ -1054,11 +1406,6 @@ def main() -> None:
     )
     ensure_state()
     render_styles()
-    config = load_config()
-    predictor = load_predictor(APP_BUILD_ID)
-    if not hasattr(predictor, "analyze_upload"):
-        load_predictor.clear()
-        predictor = load_predictor(APP_BUILD_ID)
 
     st.markdown(
         """
@@ -1073,15 +1420,67 @@ def main() -> None:
         """,
         unsafe_allow_html=True,
     )
-    render_top_metrics(config)
-
     with st.sidebar:
         st.subheader("Sessao")
         st.caption("Casos processados ficam salvos durante a sessao atual.")
         if st.button("Limpar historico", use_container_width=True):
-            st.session_state.analysis_cache = {}
-            st.session_state.analysis_order = []
+            _clear_analysis_cache()
             st.rerun()
+
+    # --- opcoes: lidas antes de qualquer processamento ---
+    _kicker = (
+        'font-size:0.85rem;font-weight:700;text-transform:uppercase;'
+        'letter-spacing:0.04em;color:#64748b;margin-top:0.2rem;margin-bottom:0.15rem;'
+    )
+    st.markdown("")
+    opt_left, opt_right = st.columns([1, 2], gap="large")
+
+    with opt_left:
+        st.markdown(f'<div style="{_kicker}">Remocao de pelos</div>', unsafe_allow_html=True)
+        remove_hair = st.toggle(
+            "Aplicar remocao de pelos antes de classificar",
+            value=st.session_state.last_remove_hair,
+            help="Aplica blackhat morphology + inpainting para reduzir artefatos de pelos. "
+                 "Alterar esta opcao refaz a classificacao das imagens ja carregadas.",
+        )
+
+    with opt_right:
+        st.markdown(f'<div style="{_kicker}">Modelo classificador</div>', unsafe_allow_html=True)
+        model_key = st.selectbox(
+            "Modelo",
+            options=list(MODEL_REGISTRY.keys()),
+            index=list(MODEL_REGISTRY.keys()).index(st.session_state.active_model_key),
+            label_visibility="collapsed",
+            help="Trocar o modelo refaz a classificacao das imagens ja carregadas. "
+                 "Resultados anteriores ficam no historico para comparacao.",
+        )
+
+    if remove_hair != st.session_state.last_remove_hair:
+        st.session_state.prev_file_hashes = set()
+        st.session_state.last_remove_hair = remove_hair
+
+    if model_key != st.session_state.active_model_key:
+        st.session_state.prev_file_hashes = set()
+        st.session_state.active_model_key = model_key
+
+    # --- metricas e predictor dependem do modelo escolhido ---
+    render_top_metrics(model_key)
+
+    reg = MODEL_REGISTRY[model_key]
+    base_config = load_config()
+    display_config = {
+        **base_config,
+        "model_name": reg["model_name"],
+        "checkpoint_path": reg["checkpoint_path"],
+        "image_size": reg["image_size"],
+        "thresholds": reg["thresholds"],
+        "metrics": reg.get("metrics") or {},
+    }
+
+    predictor = load_predictor(model_key)
+    if not hasattr(predictor, "analyze_upload"):
+        load_predictor.clear()
+        predictor = load_predictor(model_key)
 
     st.markdown("")
     uploaded_files = st.file_uploader(
@@ -1091,24 +1490,54 @@ def main() -> None:
         help="Se o nome corresponder a um ID ISIC do dataset local, a app tambem compara com o rotulo real.",
     )
 
-    current_analyses = collect_with_live_preview(uploaded_files, predictor) if uploaded_files else []
+    current_analyses = collect_with_live_preview(
+        uploaded_files, predictor, remove_hair=remove_hair, model_key=model_key
+    ) if uploaded_files else []
     session_analyses = get_session_analyses()
 
     if not session_analyses:
         render_empty_state()
         st.markdown("---")
-        render_architecture_tab(config)
+        render_architecture_tab(display_config)
         return
 
-    options = [case.case_id for case in session_analyses]
-    current_default = current_analyses[-1].case_id if current_analyses else options[-1]
-    active_case_id = st.selectbox(
-        "Caso ativo",
-        options=options,
-        index=options.index(current_default),
-        format_func=lambda case_id: f"{st.session_state.analysis_cache[case_id].display_name}  |  {st.session_state.analysis_cache[case_id].prediction.zone_label}",
-    )
+    # Deduplicate selectbox by content_key — show one entry per unique image
+    ordered_content_keys: list[str] = []
+    seen_ck: set[str] = set()
+    content_to_display: dict[str, str] = {}
+    content_to_latest: dict[str, str] = {}
+    for cid in st.session_state.analysis_order:
+        if cid not in st.session_state.analysis_cache:
+            continue
+        ck = st.session_state.cache_to_content.get(cid, cid)
+        if ck not in seen_ck:
+            seen_ck.add(ck)
+            ordered_content_keys.append(ck)
+            content_to_display[ck] = st.session_state.analysis_cache[cid].display_name
+        content_to_latest[ck] = cid  # last experiment for this image
+
+    sel_col, btn_col = st.columns([4, 1], gap="small")
+    with sel_col:
+        active_ck = st.selectbox(
+            "Caso ativo",
+            options=ordered_content_keys,
+            index=len(ordered_content_keys) - 1,
+            format_func=lambda ck: content_to_display.get(ck, ck),
+        )
+    active_case_id = content_to_latest[active_ck]
+    with btn_col:
+        st.markdown("<div style='height:1.85rem'></div>", unsafe_allow_html=True)
+        already_saved = active_case_id in st.session_state.saved_experiments
+        if already_saved:
+            st.button("Salvo ✓", disabled=True, use_container_width=True)
+        else:
+            if st.button("Salvar resultado", use_container_width=True):
+                st.session_state.saved_experiments.append(active_case_id)
+                st.rerun()
+
     active_case = st.session_state.analysis_cache[active_case_id]
+
+    render_experiment_comparison(active_case_id)
 
     result_tab, pipeline_tab, dataset_tab, history_tab, arch_tab, model_tab = st.tabs(
         ["Resultado", "Pipeline", "Dataset", "Lote e historico", "Arquitetura", "Modelo"]
@@ -1123,9 +1552,9 @@ def main() -> None:
     with history_tab:
         render_history_tab(session_analyses)
     with arch_tab:
-        render_architecture_tab(config)
+        render_architecture_tab(display_config)
     with model_tab:
-        render_model_tab(config)
+        render_model_tab(display_config)
 
 
 if __name__ == "__main__":

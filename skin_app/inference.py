@@ -193,6 +193,23 @@ def extract_hotspot_crops(
     return crops
 
 
+def remove_hair_artifacts(
+    image_rgb: np.ndarray,
+    canonical_size: tuple[int, int] = (600, 450),
+    kernel_size: int = 17,
+    threshold: int = 20,
+    inpaint_radius: int = 10,
+) -> np.ndarray:
+    height, width = image_rgb.shape[:2]
+    small = cv2.resize(image_rgb, canonical_size, interpolation=cv2.INTER_AREA)
+    gray = cv2.cvtColor(small, cv2.COLOR_RGB2GRAY)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+    blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
+    _, hair_mask = cv2.threshold(blackhat, threshold, 255, cv2.THRESH_BINARY)
+    cleaned = cv2.inpaint(small, hair_mask, inpaint_radius, cv2.INPAINT_TELEA)
+    return cv2.resize(cleaned, (width, height), interpolation=cv2.INTER_LINEAR)
+
+
 def resize_binary_mask(mask: np.ndarray, size: tuple[int, int]) -> np.ndarray:
     return (cv2.resize(mask.astype(np.float32), size, interpolation=cv2.INTER_NEAREST) > 0).astype(np.uint8)
 
@@ -370,10 +387,13 @@ class SkinCancerPredictor:
         config_path: str | Path | None = None,
         device: str | None = None,
         build_id: str | None = None,
+        model_overrides: dict | None = None,
     ) -> None:
         self.repo_root = resolve_repo_root()
         self.config_path = Path(config_path) if config_path else self.repo_root / "config" / "inference_config.json"
         self.config = self._load_config(self.config_path)
+        if model_overrides:
+            self.config.update(model_overrides)
         self.build_id = build_id
 
         self.image_size = int(self.config["image_size"])
@@ -655,6 +675,12 @@ class SkinCancerPredictor:
         note = "A classificacao usou um recorte centrado na lesao a partir da mascara prevista pelo U-Net."
         return rgb_array_to_pil(square), "predicted_lesion_crop", note
 
+    def _get_gradcam_layer(self) -> nn.Module:
+        model_name = self.config.get("model_name", "")
+        if "resnet" in model_name:
+            return self.model.layer4
+        return self.model.conv_head
+
     def _predict_with_gradcam(self, image: Image.Image) -> tuple[float, Image.Image, np.ndarray]:
         batch, display_np = self._classifier_tensor(image)
         batch = batch.to(self.device)
@@ -669,8 +695,9 @@ class SkinCancerPredictor:
             del grad_input
             gradients.append(grad_output[0])
 
-        handle_forward = self.model.conv_head.register_forward_hook(forward_hook)
-        handle_backward = self.model.conv_head.register_full_backward_hook(backward_hook)
+        gradcam_layer = self._get_gradcam_layer()
+        handle_forward = gradcam_layer.register_forward_hook(forward_hook)
+        handle_backward = gradcam_layer.register_full_backward_hook(backward_hook)
 
         self.model.zero_grad(set_to_none=True)
         logits = self.model(batch).squeeze()
@@ -925,6 +952,7 @@ class SkinCancerPredictor:
         file_bytes: bytes,
         file_name: str,
         on_step: Callable[[int, Image.Image | None], None] | None = None,
+        remove_hair: bool = True,
     ) -> CaseAnalysis:
         _step = on_step or (lambda *_: None)
 
@@ -936,21 +964,24 @@ class SkinCancerPredictor:
         dataset_match = self._lookup_dataset_match(image_id)
         timings["load_upload"] = time.perf_counter() - step_start
 
-        if dataset_match.raw_path:
-            original_image = load_pil_image(dataset_match.raw_path)
-        else:
-            original_image = uploaded_image.copy()
+        original_image = uploaded_image.copy()
+
+        analysis_image = original_image
+        if remove_hair:
+            analysis_image = rgb_array_to_pil(
+                remove_hair_artifacts(pil_to_rgb_array(original_image))
+            )
 
         _step(0, original_image)
 
         step_start = time.perf_counter()
-        segmentation_mask, segmentation_coverage = self._predict_segmentation_mask(original_image)
+        segmentation_mask, segmentation_coverage = self._predict_segmentation_mask(analysis_image)
         timings["segmentacao_original"] = time.perf_counter() - step_start
         segmentation_overlay = None
         segmentation_mask_image = None
         if segmentation_mask is not None:
             segmentation_overlay = overlay_mask_on_image(
-                pil_to_rgb_array(original_image),
+                pil_to_rgb_array(analysis_image),
                 segmentation_mask,
                 color_rgb=(239, 68, 68),
                 alpha=0.40,
@@ -964,7 +995,7 @@ class SkinCancerPredictor:
         if segmentation_mask is not None:
             _bbox = compute_bbox_from_mask(segmentation_mask)
             if _bbox is not None:
-                _orig_rgb = pil_to_rgb_array(original_image)
+                _orig_rgb = pil_to_rgb_array(analysis_image)
                 _expanded = expand_bbox(
                     _bbox,
                     width=_orig_rgb.shape[1],
@@ -987,14 +1018,9 @@ class SkinCancerPredictor:
             )
 
         step_start = time.perf_counter()
-        if dataset_match.treated_path:
-            classifier_source_image = load_pil_image(dataset_match.treated_path)
-            preprocessing_source = "treated_manifest"
-            preprocessing_note = "O nome do arquivo foi reconhecido no dataset, entao a classificacao usou a imagem tratada exportada pelo pipeline oficial."
-        else:
-            classifier_source_image, preprocessing_source, preprocessing_note = self._crop_for_classifier(
-                original_image, segmentation_mask
-            )
+        classifier_source_image, preprocessing_source, preprocessing_note = self._crop_for_classifier(
+            analysis_image, segmentation_mask
+        )
         timings["preprocess_pipeline"] = time.perf_counter() - step_start
 
         _step(4, classifier_source_image)
@@ -1037,7 +1063,7 @@ class SkinCancerPredictor:
         timings["similares"] = time.perf_counter() - step_start
         step_start = time.perf_counter()
         lesion_heuristics = self._compute_lesion_heuristics(classifier_source_image, classifier_mask)
-        segmentation_stats = self._compute_segmentation_stats(original_image, segmentation_mask)
+        segmentation_stats = self._compute_segmentation_stats(analysis_image, segmentation_mask)
         classifier_segmentation_stats = self._compute_segmentation_stats(classifier_source_image, classifier_mask)
         image_quality = self._compute_image_quality(uploaded_image)
         timings["heuristicas"] = time.perf_counter() - step_start
