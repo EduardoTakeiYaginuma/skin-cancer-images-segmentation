@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 from monitoring.drift_detector import run_drift_report
+from monitoring.retrain_trigger import run as trigger_retrain
 
 logger = logging.getLogger(__name__)
 REPORTS_DIR = Path(__file__).resolve().parent / "reports"
@@ -54,6 +55,8 @@ def main() -> None:
     parser.add_argument("--current", type=str, default=None, help="CSV de predições de produção")
     parser.add_argument("--shift", type=float, default=0.0,
                         help="Shift sintético na prob para demonstrar drift (default: 0.0 = sem drift)")
+    parser.add_argument("--retrain", action="store_true",
+                        help="Executa dvc repro quando drift detectado (default: dry-run)")
     args = parser.parse_args()
 
     if args.reference:
@@ -81,6 +84,8 @@ def main() -> None:
         logger.info("✓  Sem drift detectado. Modelo estável.")
 
     logger.info("Relatórios salvos em %s", output_dir)
+
+    trigger_retrain(results, dry_run=not args.retrain)
 
 
 if __name__ == "__main__":

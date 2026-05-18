@@ -13,12 +13,6 @@ class PredictionResponse(BaseModel):
     latency_ms: float
 
 
-class BatchJobResponse(BaseModel):
-    job_id: str
-    queue_url: str
-    message_count: int
-
-
 class HealthResponse(BaseModel):
     status: str
     model_arch: str

@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Melanoma Screening — infraestrutura serverless.
+  Provisiona Lambda (container ECR) + HTTP API Gateway + permissões IAM.
+
+Parameters:
+  EcrImageUri:
+    Type: String
+    Description: URI completa da imagem ECR (ex: 123456789.dkr.ecr.us-east-2.amazonaws.com/melanoma-lambda:latest)
+
+  LambdaRoleArn:
+    Type: String
+    Description: ARN da role IAM com permissões Lambda + S3 ReadOnly
+
+  ModelS3Bucket:
+    Type: String
+    Default: skin-cancer-segmentation
+    Description: Bucket S3 onde os checkpoints do modelo estão armazenados
+
+  MemorySize:
+    Type: Number
+    Default: 3008
+    Description: Memória alocada para a Lambda (MB)
+
+  Timeout:
+    Type: Number
+    Default: 120
+    Description: Timeout da Lambda (segundos)
+
+Resources:
+
+  # ── Lambda Function ──────────────────────────────────────────────────────────
+  MelanomaPredictor:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: melanoma-predictor
+      PackageType: Image
+      Code:
+        ImageUri: !Ref EcrImageUri
+      Role: !Ref LambdaRoleArn
+      MemorySize: !Ref MemorySize
+      Timeout: !Ref Timeout
+      Architectures:
+        - x86_64
+      EphemeralStorage:
+        Size: 1024
+      Environment:
+        Variables:
+          MODEL_S3_BUCKET: !Ref ModelS3Bucket
+          MODEL_S3_KEY: models/resnet50_aug_224x224.pt
+          SEG_MODEL_S3_KEY: models/unet_segmentation.pt
+
+  # ── HTTP API Gateway (v2) ────────────────────────────────────────────────────
+  MelanomaApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: melanoma-api
+      ProtocolType: HTTP
+      Description: API pública para triagem de melanoma
+
+  MelanomaIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref MelanomaApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt MelanomaPredictor.Arn
+      PayloadFormatVersion: "2.0"
+
+  MelanomaPredictRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref MelanomaApi
+      RouteKey: "POST /predict"
+      Target: !Sub "integrations/${MelanomaIntegration}"
+
+  MelanomaApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref MelanomaApi
+      StageName: prod
+      AutoDeploy: true
+
+  # ── Permissão: API Gateway → Lambda ─────────────────────────────────────────
+  ApiGatewayLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt MelanomaPredictor.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MelanomaApi}/*/*/predict"
+
+Outputs:
+  ApiEndpoint:
+    Description: URL do endpoint de predição
+    Value: !Sub "https://${MelanomaApi}.execute-api.${AWS::Region}.amazonaws.com/prod/predict"
+
+  LambdaArn:
+    Description: ARN da função Lambda
+    Value: !GetAtt MelanomaPredictor.Arn
