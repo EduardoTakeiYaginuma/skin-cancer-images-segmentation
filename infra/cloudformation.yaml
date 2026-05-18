@@ -6,7 +6,7 @@ Description: >
 Parameters:
   EcrImageUri:
     Type: String
-    Description: URI completa da imagem ECR (ex: 123456789.dkr.ecr.us-east-2.amazonaws.com/melanoma-lambda:latest)
+    Description: "URI completa da imagem ECR (ex: 123456789.dkr.ecr.us-east-2.amazonaws.com/melanoma-lambda:latest)"
 
   LambdaRoleArn:
     Type: String
