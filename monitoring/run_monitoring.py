@@ -1,4 +1,15 @@
-"""Entry point for drift monitoring. Run: python monitoring/run_monitoring.py [--log <path>]"""
+"""Entry point para drift monitoring.
+
+Uso:
+    # Demo com dados sintéticos (sem argumentos):
+    python -m monitoring.run_monitoring
+
+    # Com dados reais:
+    python -m monitoring.run_monitoring --reference data/ref_preds.csv --current data/prod_preds.csv
+
+    # Aumentar shift para forçar drift (demo):
+    python -m monitoring.run_monitoring --shift 0.3
+"""
 from __future__ import annotations
 
 import argparse
@@ -6,39 +17,70 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from monitoring.drift_detector import detect_drift, load_current_data, load_reference_data
+import numpy as np
+import pandas as pd
+
+from monitoring.drift_detector import run_drift_report
 
 logger = logging.getLogger(__name__)
 REPORTS_DIR = Path(__file__).resolve().parent / "reports"
-FEATURE_COLS = ["mask_coverage_after_crop", "hair_pixels_detected", "final_height", "final_width"]
+
+
+def _synthetic_reference(n: int = 500, seed: int = 0) -> pd.DataFrame:
+    """Distribução de referência baseada no perfil real do HAM10000 (melanoma ~11%)."""
+    rng = np.random.default_rng(seed)
+    probs = np.clip(rng.beta(1.5, 8, size=n), 0, 1)
+    zones = np.where(probs < 0.008, "negative", np.where(probs < 0.159, "review", "positive"))
+    return pd.DataFrame({"melanoma_prob": probs, "triage_zone": zones})
+
+
+def _synthetic_current(reference: pd.DataFrame, shift: float, n: int = 200) -> pd.DataFrame:
+    """Produção simulada com shift na distribuição de probabilidades."""
+    rng = np.random.default_rng(42)
+    probs = np.clip(
+        rng.choice(reference["melanoma_prob"].values, size=n, replace=True)
+        + rng.normal(shift, 0.06, size=n),
+        0, 1,
+    )
+    zones = np.where(probs < 0.008, "negative", np.where(probs < 0.159, "review", "positive"))
+    return pd.DataFrame({"melanoma_prob": probs, "triage_zone": zones})
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    parser = argparse.ArgumentParser(description="Gera relatório de drift com Evidently.")
-    parser.add_argument("--log", type=str, default=None, help="CSV com dados de inferência recentes")
+    parser = argparse.ArgumentParser(description="Detecta drift entre dados de treino e produção.")
+    parser.add_argument("--reference", type=str, default=None, help="CSV de referência (treino/val)")
+    parser.add_argument("--current", type=str, default=None, help="CSV de predições de produção")
+    parser.add_argument("--shift", type=float, default=0.0,
+                        help="Shift sintético na prob para demonstrar drift (default: 0.0 = sem drift)")
     args = parser.parse_args()
 
-    reference = load_reference_data()
-
-    if args.log:
-        current = load_current_data(args.log)
+    if args.reference:
+        reference = pd.read_csv(args.reference)
+        logger.info("Referência carregada: %d linhas", len(reference))
     else:
-        logger.warning("Nenhum log de inferência fornecido — usando amostra aleatória do val set como proxy.")
-        current = reference.sample(frac=0.2, random_state=42)
+        logger.info("Gerando referência sintética (demo)…")
+        reference = _synthetic_reference()
 
-    available_cols = [c for c in FEATURE_COLS if c in reference.columns and c in current.columns]
-    if not available_cols:
-        logger.error("Nenhuma feature de overlap entre reference e current. Abortando.")
-        return
+    if args.current:
+        current = pd.read_csv(args.current)
+        logger.info("Produção carregada: %d linhas", len(current))
+    else:
+        logger.info("Gerando produção sintética com shift=%.2f…", args.shift)
+        current = _synthetic_current(reference, shift=args.shift)
 
-    report = detect_drift(reference, current, feature_cols=available_cols)
+    output_dir = REPORTS_DIR / datetime.now().strftime("%Y%m%d_%H%M%S")
+    results = run_drift_report(reference, current, output_dir)
 
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    report_path = REPORTS_DIR / f"drift_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-    report.save_html(str(report_path))
-    logger.info("Relatório salvo em %s", report_path)
+    drifted = [k for k, v in results.items() if v.get("drift_detected")]
+    if drifted:
+        logger.warning("⚠  DRIFT DETECTADO em: %s", ", ".join(drifted))
+        logger.warning("   Considerar re-treinamento do modelo.")
+    else:
+        logger.info("✓  Sem drift detectado. Modelo estável.")
+
+    logger.info("Relatórios salvos em %s", output_dir)
 
 
 if __name__ == "__main__":
