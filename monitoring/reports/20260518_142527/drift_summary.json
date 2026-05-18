@@ -1,0 +1,32 @@
+{
+  "melanoma_prob_ks": {
+    "test": "ks_2samp",
+    "statistic": 0.095,
+    "p_value": 0.144121,
+    "drift_detected": false,
+    "alpha": 0.05
+  },
+  "triage_zone_chi2": {
+    "test": "chi2_contingency",
+    "statistic": 22.720871,
+    "p_value": 1.2e-05,
+    "dof": 2,
+    "drift_detected": true,
+    "alpha": 0.05,
+    "categories": [
+      "negative",
+      "positive",
+      "review"
+    ],
+    "reference_counts": {
+      "negative": 5,
+      "positive": 201,
+      "review": 294
+    },
+    "current_counts": {
+      "negative": 15,
+      "positive": 83,
+      "review": 102
+    }
+  }
+}

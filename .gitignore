@@ -95,3 +95,6 @@ outputs/models/**/*.pt
 outputs/models/mlflow/
 !outputs/models/*.dvc
 !outputs/models/**/*.dvc
+
+
+ec2key-compvision.pem
