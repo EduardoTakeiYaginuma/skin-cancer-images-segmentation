@@ -98,3 +98,8 @@ outputs/models/mlflow/
 
 
 ec2key-compvision.pem
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.backup
+infra/terraform/*.tfvars
