@@ -62,13 +62,11 @@ ENV/
 env.bak/
 venv.bak/
 
-# Static analysis / editor
+# Static analysis caches
 .mypy_cache/
 .pyre/
 .pytype/
 .ruff_cache/
-.cursorignore
-.cursorindexingignore
 
 # OS files
 .DS_Store
@@ -77,15 +75,13 @@ venv.bak/
 mlruns/
 mlflow.db
 
-# Local datasets and generated artifacts
-archive/
+# Generated artifacts (figures and model binaries); DVC pointers are kept
 notebooks/outputs/
 
-# DVC: ignora conteúdo de data/ e outputs/ mas permite ponteiros .dvc
+# DVC: ignore raw data/ and outputs/ content but keep .dvc pointers
 data/images/
 data/masks/
 data/metadata.csv
-data/ISIC_2020_Training_GroundTruth.csv
 data/processed/
 data/*
 !data/*.dvc
@@ -96,10 +92,11 @@ outputs/models/mlflow/
 !outputs/models/*.dvc
 !outputs/models/**/*.dvc
 
-
-ec2key-compvision.pem
 # Terraform
 infra/terraform/.terraform/
 infra/terraform/*.tfstate
 infra/terraform/*.tfstate.backup
 infra/terraform/*.tfvars
+
+# Local working files (not part of the deliverable)
+video_script.md

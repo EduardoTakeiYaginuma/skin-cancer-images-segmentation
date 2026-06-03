@@ -44,7 +44,7 @@ The classifier is a **ResNet50** initialized with ImageNet weights and fine-tune
 
 To support clinical triage rather than a hard binary decision, the model exposes **three zones** via a dual-threshold strategy. A high threshold `T_HIGH` is selected on the validation set as the value that achieves at least 85% sensitivity while preserving an acceptable specificity floor. A low threshold `T_LOW` is set at the 2nd percentile of melanoma probabilities on the validation set. Predictions below `T_LOW` are routed to the automatic-dismissal zone ("negative"), predictions above `T_HIGH` to the high-risk zone ("positive"), and the remaining cases to a manual-review zone ("review"). Both thresholds are persisted alongside the checkpoint so the serving layer applies the same operating point used at training time.
 
-The final selected configuration is **ResNet50 with online augmentation at 224×224**, with a test AUC of **0.9128** and a melanoma capture rate of 85.6% in the high-confidence zone.
+The final selected configuration is **ResNet50 with online augmentation at 224×224**. The deployed checkpoint achieves a test AUC of **0.8941**, a sensitivity of **86.2%** and a specificity of **78.1%** at the operating threshold.
 
 ---
 

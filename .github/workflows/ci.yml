@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main, mlOps_project]
   schedule:
-    - cron: "0 9 * * 1"  # toda segunda às 9h — para o job de monitoring
+    - cron: "0 9 * * 1"  # every Monday at 09:00 UTC, for the monitoring job
 
 jobs:
   lint:

@@ -1,7 +1,7 @@
 # Binary Melanoma Screening from Dermatoscopic Images
 
-**Authors:** Gabriel Fernando Missaka Mendes | Eduardo Takei Yaginuma  
-**Course:** Artificial Intelligence in Medicine and Healthcare
+**Authors:** Gabriel Fernando Missaka Mendes | Eduardo Takei Yaginuma
+**Course:** MLOps at Insper (26.1)
 
 ## Project Video
 
@@ -11,28 +11,17 @@ A 3-5 minute video explaining the project, the dataset and the main MLOps decisi
 
 ## Project Overview
 
-Binary classification of dermatoscopic images: melanoma (`1`) versus non-melanoma (`0`).
+This project takes a fine-tuned ResNet50 classifier for binary melanoma screening and operationalizes it end-to-end. The focus is not on pushing classification accuracy, but on demonstrating a complete MLOps stack: experiment tracking, data and feature versioning, automated container-based deployment, infrastructure as code, structured logging, statistical drift monitoring, automatic retraining on degradation, and full continuous integration.
 
-The project currently uses the dataset stored locally under `data/`, with:
-
-- `data/metadata.csv`
-- `data/images/`
-- `data/masks/`
-
-The workflow is organized around:
-
-- exploratory analysis of the original 7 classes
-- conversion to a binary melanoma vs non-melanoma task
-- lesion-centric preprocessing guided by segmentation masks
-- offline data augmentation as a separate export step
-- comparison between baseline training and training with augmentation
-- downstream classification experiments
+The detailed report is in [`docs/project_report.md`](docs/project_report.md).
 
 ## Dataset
 
+The project uses the **HAM10000** dataset from the ISIC archive: **10,015 dermatoscopic images** annotated across 7 diagnostic classes (`MEL`, `NV`, `BCC`, `AKIEC`, `BKL`, `DF`, `VASC`), collapsed into a binary `melanoma vs. non-melanoma` task. Class imbalance is significant: only ~11% of the images are melanoma.
+
 Expected local layout:
 
-```text
+```
 data/
 ├── metadata.csv
 ├── images/
@@ -44,186 +33,119 @@ data/
 └── processed/
 ```
 
-Current dataset statistics:
-
-- `10,015` images
-- `1,113` melanoma images
-- `8,902` non-melanoma images
-- original 7-class annotation preserved in the metadata
-- masks available for lesion-aware preprocessing
-
-## Preprocessing Policy
-
-The current notebooks assume:
-
-- the raw source of truth is `data/`
-- all melanoma images are kept
-- only non-melanoma images are downsampled when building the effective dataset
-- the negative subclass mix is preserved as much as possible
-- lesion masks are used to support lesion-centric cropping
-- augmentation is generated after preprocessing as a separate experimental branch
-
-The default effective ratio in preprocessing is `3.0` non-melanoma images for each melanoma image.
+The heavy data (`data/images/`, `data/masks/`, `data/metadata.csv`) is versioned with DVC against an S3 remote. Run `dvc pull` to fetch.
 
 ## Project Structure
 
-```text
-skin-cancer-images-segmentation/
-├── data/
-│   ├── metadata.csv
-│   ├── images/
-│   ├── masks/
-│   ├── metadata/              # Saved train/val/test split CSVs
-│   └── processed/             # Exported train/val/test folders and manifests
-├── docs/
-├── notebooks/
-│   ├── 01_data_exploration.ipynb
-│   ├── 02_preprocessing.ipynb
-│   ├── 03_data_augmentation.ipynb
-│   ├── 04_classification.ipynb
-│   └── outputs/
-├── outputs/
-│   └── figures/
-├── tools/
-│   ├── generate_exploration_notebook.py
-│   ├── generate_preprocessing_notebook.py
-│   └── generate_data_augmentation_notebook.py
-├── requirements.txt
-├── setup_data.py
-└── README.md
+```
+.
+├── api/                  # FastAPI service (REST endpoints)
+├── skin_app/             # Core inference and structured logging
+├── monitoring/           # Drift detector, retrain trigger, reports
+├── feature_store/        # Feast feature store (entities, views, services, scripts)
+├── infra/                # IaC: CloudFormation + Terraform
+├── notebooks/            # EDA, segmentation, preprocessing, modeling
+├── scripts/              # deploy_lambda.sh, dvc_setup_s3.sh
+├── tests/                # pytest suite
+├── docs/                 # project_report.md
+├── config/               # inference_config.json
+├── data/                 # DVC pointers + metadata splits
+├── outputs/              # DVC pointers for trained models
+├── .github/workflows/    # CI (lint + tests + docker build + cron monitoring)
+├── app.py                # Streamlit demo UI
+├── train.py              # Training script with MLflow integration
+├── evaluate.py           # Standalone evaluation
+├── lambda_handler.py     # AWS Lambda entry point
+├── mlflow_config.py      # MLflow tracking and registry config
+├── dvc.yaml              # DVC pipeline: preprocess -> train -> evaluate
+├── params.yaml           # DVC parameters
+├── Dockerfile            # FastAPI image
+├── Dockerfile.lambda     # AWS Lambda container image
+├── docker-compose.yml    # Local API + Streamlit + MLflow UI
+└── requirements*.txt     # base / api / ci / lambda
 ```
 
 ## Setup
 
-Validate the local dataset:
-
 ```bash
-python3 setup_data.py
-```
-
-Regenerate the tracked notebooks:
-
-```bash
-python3 tools/generate_exploration_notebook.py
-python3 tools/generate_preprocessing_notebook.py
-python3 tools/generate_data_augmentation_notebook.py
-```
-
-Install dependencies when needed:
-
-```bash
+# 1. Install dependencies
 pip install -r requirements.txt
+
+# 2. Fetch dataset and model checkpoints from the S3 DVC remote
+dvc pull
+
+# 3. Run the local API
+uvicorn api.main:app --reload
+
+# 4. (Optional) Run the Streamlit demo
+streamlit run app.py
 ```
 
-## Web Application
+## Reproducing the pipeline
 
-The repository now includes a richer Streamlit demo for dermatoscopic triage based on the
-final `EfficientNet-B0` experiment documented in `docs/modeling_2_training_journal.md`.
-
-Current app capabilities:
-
-- upload one or multiple dermatoscopic images
-- run the calibrated EfficientNet-B0 classifier
-- return melanoma probability plus the three-zone clinical triage output
-- generate Grad-CAM visual explanations for the classifier
-- run a U-Net segmentation model to highlight the lesion area
-- combine Grad-CAM and segmentation in the classifier frame
-- generate occlusion-sensitivity maps and hotspot crops
-- compute simple heuristic descriptors inspired by the ABCD rule
-- retrieve visually similar cases from the local processed dataset
-- compare predictions with the local dataset truth when the uploaded filename matches an ISIC case ID
-- keep a session history and export a CSV/JSON summary
-
-Main deployment settings:
-
-- classification checkpoint: `outputs/models/model_comparison/efficientnet_b0_base_224x224_calibrated.pt`
-- segmentation checkpoint: `outputs/models/unet_segmentation.pt`
-- `T_LOW = 0.003779`
-- `T_HIGH = 0.220775`
-
-Run locally:
+The DVC pipeline declares three stages in `dvc.yaml`: `preprocess`, `train`, `evaluate`.
 
 ```bash
-./venv/bin/streamlit run app.py
+dvc repro        # rebuilds the full pipeline incrementally
+mlflow ui        # inspect the tracked experiment locally
 ```
 
-## Notebooks
+## Tests
 
-| Notebook | Description | Status |
-|----------|-------------|--------|
-| `01_data_exploration.ipynb` | Class distribution, sample images, masks, lesion coverage and dataset insights | Done |
-| `02_preprocessing.ipynb` | Effective dataset selection, lesion-centric preprocessing, baseline export and baseline loaders | Done |
-| `03_data_augmentation.ipynb` | Offline augmentation export for the training split, creating the `with_augmentation` branches in `224x224` and `64x64` | Done |
-| `04_classification.ipynb` | Binary classifier training and threshold selection experiments | In progress |
+```bash
+pytest tests/ -v
+```
+
+CI runs lint (ruff), the pytest suite, and the Docker build on every push and pull request. A monitoring job runs the drift report on a cron schedule every Monday at 09:00.
+
+## Deployment
+
+The model is served as an AWS Lambda container image behind an HTTP API Gateway v2 route `POST /predict`. The pipeline is automated end-to-end:
+
+```bash
+bash scripts/deploy_lambda.sh <account-id> <region> <lambda-role-arn>
+```
+
+Infrastructure as Code is available in two equivalent forms under `infra/`:
+
+- `infra/cloudformation.yaml` (AWS CloudFormation)
+- `infra/terraform/` (HashiCorp Terraform)
+
+## Monitoring
+
+Statistical drift detection uses the Kolmogorov-Smirnov test (for continuous features such as predicted melanoma probability) and the Chi-squared test (for categorical features such as the assigned triage zone).
+
+```bash
+python -m monitoring.run_monitoring --shift 0.25
+```
+
+The detector writes a JSON summary and PNG visualizations to `monitoring/reports/<timestamp>/`. When drift is flagged, `monitoring/retrain_trigger.py` invokes `dvc repro --force` and appends an audit entry to `monitoring/retrain_log.jsonl`.
 
 ## Feature Store (Feast)
 
-The project integrates [Feast](https://feast.dev) for versioned feature management, enabling consistent feature retrieval for both training and serving.
+Two feature views are defined per `image_id`:
 
-### Structure
+| Feature View | Features |
+|---|---|
+| `lesion_classification` | MEL, NV, BCC, AKIEC, BKL, DF, VASC, binary_label, label, split |
+| `preprocessing_stats` | mask_coverage_after_crop, hair_pixels_detected, final_height, final_width |
 
-```text
-feature_store/
-├── feature_repo/
-│   ├── feature_store.yaml     # Configuração local (SQLite registry + online store)
-│   ├── entities.py            # Entidade principal: image_id
-│   ├── data_sources.py        # FileSource apontando para os Parquets gerados
-│   ├── feature_views.py       # lesion_classification + preprocessing_stats
-│   └── feature_services.py   # melanoma_training_features + melanoma_serving_features
-├── data/
-│   └── sources/               # Parquets gerados por prepare_sources.py (gitignored)
-└── scripts/
-    ├── prepare_sources.py     # Converte CSVs do projeto para Parquet
-    ├── apply_registry.py      # Registra features no Feast (feast apply)
-    ├── get_historical_features.py  # Exemplo de retrieval para treino
-    └── materialize_online.py  # Materializa para online store
-```
+Two feature services expose them for training and serving:
 
-### Quickstart
+| Service | Use |
+|---|---|
+| `melanoma_training_features` | Offline training |
+| `melanoma_serving_features` | Online inference |
+
+Quickstart:
 
 ```bash
-# 0. Ativar o ambiente virtual do projeto
-source venv/bin/activate
-
-# 1. Instalar dependências (inclui feast e pyarrow)
-python3 -m pip install -r requirements.txt
-
-# 2. Converter os CSVs do projeto para Parquet (fontes do Feast)
-python3 feature_store/scripts/prepare_sources.py
-
-# 3. Registrar as features no registry local
-python3 feature_store/scripts/apply_registry.py
-
-# 4. Recuperar features históricas para treino
-python3 feature_store/scripts/get_historical_features.py
-
-# 5. (Opcional) Materializar para online store e servir em tempo real
-python3 feature_store/scripts/materialize_online.py
+python feature_store/scripts/prepare_sources.py     # CSVs -> Parquet
+python feature_store/scripts/apply_registry.py      # feast apply
+python feature_store/scripts/get_historical_features.py
+python feature_store/scripts/materialize_online.py
 ```
 
-### Feature Views
+## Logging
 
-| Feature View | Entidade | Features |
-|---|---|---|
-| `lesion_classification` | `image_id` | MEL, NV, BCC, AKIEC, BKL, DF, VASC, binary_label, label, split |
-| `preprocessing_stats` | `image_id` | mask_coverage_after_crop, hair_pixels_detected, final_height, final_width |
-
-### Feature Services
-
-| Serviço | Uso | Features incluídas |
-|---|---|---|
-| `melanoma_training_features` | Treino offline | Todas as features acima |
-| `melanoma_serving_features` | Inferência online | mask_coverage_after_crop, hair_pixels_detected |
-
----
-
-## Pipeline Outputs
-
-The preprocessing and augmentation notebooks export:
-
-- `data/processed/without_augmentation/` from `02_preprocessing.ipynb`
-- `data/processed/without_augmentation_64x64/` from `02_preprocessing.ipynb`
-- `data/processed/with_augmentation/` from `03_data_augmentation.ipynb`
-- `data/processed/with_augmentation_64x64/` from `03_data_augmentation.ipynb`
-- split manifests for each experiment
-- normalization stats and preprocessing config under `notebooks/outputs/preprocessing/`
+Structured JSON logging via `python-json-logger` is centralized in [`skin_app/logging_config.py`](skin_app/logging_config.py) and reused across the FastAPI service, the Lambda handler, and the monitoring entry points.

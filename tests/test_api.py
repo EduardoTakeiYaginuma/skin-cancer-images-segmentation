@@ -66,7 +66,7 @@ def _make_fake_analysis() -> CaseAnalysis:
 @pytest.fixture()
 def client() -> TestClient:
     mock_predictor = MagicMock()
-    mock_predictor.config = {"model_name": "efficientnet_b0"}
+    mock_predictor.config = {"model_name": "resnet50"}
     mock_predictor.device = "cpu"
     mock_predictor.model_checkpoint_hash = "abc123"
     mock_predictor.analyze_upload.return_value = _make_fake_analysis()

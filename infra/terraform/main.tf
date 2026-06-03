@@ -12,7 +12,7 @@ provider "aws" {
   region = var.aws_region
 }
 
-# ── Lambda Function ────────────────────────────────────────────────────────────
+# Lambda Function
 resource "aws_lambda_function" "melanoma_predictor" {
   function_name = "melanoma-predictor"
   package_type  = "Image"
@@ -37,11 +37,11 @@ resource "aws_lambda_function" "melanoma_predictor" {
   }
 }
 
-# ── HTTP API Gateway (v2) ──────────────────────────────────────────────────────
+# HTTP API Gateway (v2)
 resource "aws_apigatewayv2_api" "melanoma_api" {
   name          = "melanoma-api"
   protocol_type = "HTTP"
-  description   = "API pública para triagem de melanoma"
+  description   = "Public API for melanoma triage"
 }
 
 resource "aws_apigatewayv2_integration" "lambda_integration" {
@@ -63,7 +63,7 @@ resource "aws_apigatewayv2_stage" "prod" {
   auto_deploy = true
 }
 
-# ── Permissão: API Gateway → Lambda ───────────────────────────────────────────
+# Permission: API Gateway -> Lambda
 resource "aws_lambda_permission" "apigw_invoke" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"

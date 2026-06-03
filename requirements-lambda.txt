@@ -1,5 +1,5 @@
-# Dependências mínimas para o Lambda handler (inferência).
-# Sem scikit-learn, scipy, mlflow, fastapi, feast — apenas o que a inferência usa.
+# Minimal dependencies for the Lambda inference handler.
+# Excludes scikit-learn, scipy, mlflow, fastapi and feast: only what inference needs.
 
 # Core ML
 numpy>=1.26,<2

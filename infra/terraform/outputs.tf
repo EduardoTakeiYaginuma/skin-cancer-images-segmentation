@@ -1,9 +1,9 @@
 output "api_endpoint" {
-  description = "URL do endpoint de predição"
+  description = "URL of the prediction endpoint"
   value       = "${aws_apigatewayv2_stage.prod.invoke_url}/predict"
 }
 
 output "lambda_arn" {
-  description = "ARN da função Lambda"
+  description = "Lambda function ARN"
   value       = aws_lambda_function.melanoma_predictor.arn
 }

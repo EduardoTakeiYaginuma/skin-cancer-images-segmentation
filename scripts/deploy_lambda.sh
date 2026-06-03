@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Deploy da Lambda via Docker image no ECR.
-# Uso: bash scripts/deploy_lambda.sh <account-id> <region> [<lambda-role-arn>]
+# Deploy the Lambda function via a Docker image hosted on ECR.
+# Usage: bash scripts/deploy_lambda.sh <account-id> <region> [<lambda-role-arn>]
 
 set -euo pipefail
 
-ACCOUNT_ID="${1:?Forneça o AWS Account ID}"
+ACCOUNT_ID="${1:?Provide the AWS account ID}"
 REGION="${2:-us-east-1}"
 ROLE_ARN="${3:-}"
 REPO_NAME="melanoma-lambda"
@@ -12,34 +12,34 @@ FUNCTION_NAME="melanoma-predictor"
 IMAGE_TAG="latest"
 ECR_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}:${IMAGE_TAG}"
 
-echo "==> Autenticando no ECR..."
+echo "==> Authenticating to ECR..."
 aws ecr get-login-password --region "${REGION}" | \
   docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 
-echo "==> Criando repositório ECR (se não existir)..."
+echo "==> Creating the ECR repository if needed..."
 aws ecr describe-repositories --repository-names "${REPO_NAME}" --region "${REGION}" 2>/dev/null || \
   aws ecr create-repository --repository-name "${REPO_NAME}" --region "${REGION}"
 
-echo "==> Build da imagem Lambda..."
+echo "==> Building the Lambda image..."
 docker build -f Dockerfile.lambda -t "${REPO_NAME}:${IMAGE_TAG}" .
 
-echo "==> Tag e push para ECR..."
+echo "==> Tagging and pushing to ECR..."
 docker tag "${REPO_NAME}:${IMAGE_TAG}" "${ECR_URI}"
 docker push "${ECR_URI}"
 
-# Criar ou atualizar Lambda
+# Create or update the Lambda function
 if aws lambda get-function --function-name "${FUNCTION_NAME}" --region "${REGION}" 2>/dev/null; then
-  echo "==> Atualizando Lambda existente..."
+  echo "==> Updating the existing Lambda function..."
   aws lambda update-function-code \
     --function-name "${FUNCTION_NAME}" \
     --image-uri "${ECR_URI}" \
     --region "${REGION}"
 else
   if [ -z "${ROLE_ARN}" ]; then
-    echo "ERRO: Lambda não existe. Forneça o Role ARN como 3º argumento."
+    echo "ERROR: Lambda does not exist. Provide the IAM role ARN as the third argument."
     exit 1
   fi
-  echo "==> Criando Lambda..."
+  echo "==> Creating the Lambda function..."
   aws lambda create-function \
     --function-name "${FUNCTION_NAME}" \
     --package-type Image \
@@ -51,6 +51,6 @@ else
 fi
 
 echo ""
-echo "Deploy concluído: ${ECR_URI}"
-echo "Para expor via API Gateway, execute:"
-echo "  bash scripts/setup_api_gateway.sh ${ACCOUNT_ID} ${REGION}"
+echo "Deploy finished: ${ECR_URI}"
+echo "To provision the API Gateway in front of this Lambda, apply the IaC under infra/"
+echo "(CloudFormation: infra/cloudformation.yaml, or Terraform: infra/terraform/)."

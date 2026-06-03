@@ -250,7 +250,7 @@ def render_top_metrics(config: dict) -> None:
     cols = st.columns(6)
     metrics = config["metrics"]
     with cols[0]:
-        render_metric_card("AUC", f'{metrics["auc"]:.4f}', "EfficientNet-B0 calibrado")
+        render_metric_card("AUC", f'{metrics["auc"]:.4f}', "ResNet50 calibrado")
     with cols[1]:
         render_metric_card("Sensibilidade", f'{metrics["sensitivity"] * 100:.1f}%', "Meta clinica priorizando melanoma")
     with cols[2]:
@@ -303,7 +303,7 @@ _PIPELINE_STEPS = [
     ("3 — Overlay", "Mascara vermelha sobreposta na imagem original"),
     ("4 — Bounding box", "Amarelo = bbox; verde = bbox expandida com margem"),
     ("5 — Crop + Pad", "Recorte centrado na lesao, padded para quadrado"),
-    ("6 — Entrada 224x224", "Imagem final vista pelo EfficientNet-B0"),
+    ("6 — Entrada 224x224", "Imagem final vista pelo ResNet50"),
 ]
 
 
@@ -706,7 +706,7 @@ def render_history_tab(analyses: list[CaseAnalysis]) -> None:
 def render_model_tab(config: dict) -> None:
     st.markdown("**Resumo do experimento implantado**")
     st.write(
-        "A aplicacao usa o checkpoint calibrado do EfficientNet-B0 com thresholds clinicos em tres zonas, "
+        "A aplicacao usa o checkpoint calibrado do ResNet50 com thresholds clinicos em tres zonas, "
         "somado a um U-Net de segmentacao para enriquecer o contexto visual e ajudar no recorte da lesao."
     )
     details_cols = st.columns(3)
@@ -741,7 +741,7 @@ def render_pipeline_tab(case: CaseAnalysis) -> None:
         <div class="panel-card" style="margin-bottom:1.1rem;">
           <div class="section-kicker">Como a imagem chega ao modelo</div>
           <p class="small-note" style="margin-top:0.3rem;">
-            Cada etapa abaixo transforma a imagem antes que o EfficientNet-B0 a veja.
+            Cada etapa abaixo transforma a imagem antes que o ResNet50 a veja.
             O pipeline e determinado automaticamente dependendo se o arquivo foi reconhecido
             no dataset local ou se precisou de recorte via segmentacao.
           </p>
@@ -779,7 +779,7 @@ def render_pipeline_tab(case: CaseAnalysis) -> None:
         (
             "6 — Entrada do modelo (224x224)",
             case.classifier_input_image,
-            "Versao final vista pelo EfficientNet-B0",
+            "Versao final vista pelo ResNet50",
         ),
     ]
 
@@ -823,7 +823,7 @@ def _make_pipeline_figure(config: dict) -> plt.Figure:
         (1.3,  3.2, "Imagem\nDermatoscópica", "#dbeafe", "#1e40af", "Dataset HAM10000\nou upload externo"),
         (3.6,  3.2, "U-Net\nSegmentação",     "#e0f2fe", "#0369a1", "Entrada 64×64\nSaída: máscara binária"),
         (6.0,  3.2, "BBox + Crop\n+ Pad Quadrado", "#dcfce7", "#15803d", "Margem 15%\nPad tipo 'edge'"),
-        (8.5,  3.2, "EfficientNet-B0\nClassificador", "#faf5ff", "#7e22ce", "Entrada 224×224\nPré-treinado ImageNet"),
+        (8.5,  3.2, "ResNet50\nClassificador", "#faf5ff", "#7e22ce", "Entrada 224×224\nPré-treinado ImageNet"),
         (11.0, 3.2, "Calibração\nde Temperatura", "#fff7ed", "#c2410c", "Platt Scaling\nP(melanoma) ∈ [0,1]"),
     ]
 
@@ -882,7 +882,7 @@ def _make_pipeline_figure(config: dict) -> plt.Figure:
     legend_items = [
         mpatches.Patch(facecolor="#dbeafe", edgecolor="#1e40af", label="Entrada"),
         mpatches.Patch(facecolor="#e0f2fe", edgecolor="#0369a1", label="U-Net (Segmentação)"),
-        mpatches.Patch(facecolor="#faf5ff", edgecolor="#7e22ce", label="EfficientNet-B0 (Classificação)"),
+        mpatches.Patch(facecolor="#faf5ff", edgecolor="#7e22ce", label="ResNet50 (Classificação)"),
         mpatches.Patch(facecolor="#fff7ed", edgecolor="#c2410c", label="Calibração de Temperatura"),
     ]
     ax.legend(handles=legend_items, loc="lower left", fontsize=7.5,
@@ -951,14 +951,14 @@ def render_architecture_tab(config: dict) -> None:
 
     with col_b:
         st.markdown(_section(
-            "Classificação — EfficientNet-B0",
-            """O classificador é um <strong>EfficientNet-B0</strong> com pesos pré-treinados no
+            "Classificação — ResNet50",
+            """O classificador é um <strong>ResNet50</strong> com pesos pré-treinados no
             ImageNet, fine-tuned no HAM10000 com a formulação binária.
             <br><br>
-            O EfficientNet escala profundidade, largura e resolução da rede de forma conjunta
-            (<em>compound scaling</em>), obtendo alta acurácia com poucos parâmetros (~5,3M).
-            A entrada é <strong>224×224 pixels</strong> normalizada com a média e desvio-padrão
-            calculados sobre o próprio dataset.
+            A arquitetura ResNet50 usa blocos residuais (skip connections) para permitir
+            o treinamento de redes profundas (~25M parâmetros) sem o problema de gradientes
+            que desaparecem. A entrada é <strong>224×224 pixels</strong> normalizada com a
+            média e desvio-padrão calculados sobre o próprio dataset.
             <br><br>
             A saída da rede é um logit escalar convertido em probabilidade via sigmoide.
             O treinamento usou <em>Binary Cross-Entropy</em> sem <em>pos_weight</em>,
@@ -982,7 +982,7 @@ def render_architecture_tab(config: dict) -> None:
     with col_c:
         st.markdown(_section(
             "Calibração e Sistema de 3 Zonas",
-            f"""O score bruto do EfficientNet-B0 tende a ser mal-calibrado em datasets
+            f"""O score bruto do ResNet50 tende a ser mal-calibrado em datasets
             desbalanceados. A probabilidade final é ajustada via <strong>Platt Scaling</strong>
             (regressão logística sobre os logits do conjunto de validação).
             <br><br>
@@ -1023,7 +1023,7 @@ def render_architecture_tab(config: dict) -> None:
 
     st.markdown("")
     st.caption(
-        "Ferramenta desenvolvida para fins acadêmicos (Insper — AI in Medicine). "
+        "Ferramenta desenvolvida para fins acadêmicos (Insper — MLOps). "
         "Não substitui avaliação dermatológica clínica."
     )
 
@@ -1063,10 +1063,10 @@ def main() -> None:
     st.markdown(
         """
         <div class="hero-shell">
-          <div class="section-kicker" style="color:#fbbf24;">AI in Medicine Demo</div>
+          <div class="section-kicker" style="color:#fbbf24;">MLOps Demo</div>
           <h1>Triagem dermatoscopica com classificacao e segmentacao assistida</h1>
           <p>
-            Esta interface combina o EfficientNet-B0 final do projeto com segmentacao visual da lesao,
+            Esta interface combina o ResNet50 final do projeto com segmentacao visual da lesao,
             lookup no dataset local e um resumo em lote para apresentacao.
           </p>
         </div>

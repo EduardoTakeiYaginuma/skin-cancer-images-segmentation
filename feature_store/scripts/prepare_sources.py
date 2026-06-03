@@ -37,7 +37,7 @@ def prepare_classification_source() -> None:
         print("Erro: arquivos de split não encontrados:")
         for m in missing:
             print(f"  {m}")
-        print("Execute setup_data.py ou regenere os splits pelo notebook 01.")
+        print("Regenere os splits executando o notebook 01_data_exploration.ipynb.")
         sys.exit(1)
 
     dfs = []
