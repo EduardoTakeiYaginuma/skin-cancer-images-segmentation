@@ -1,6 +1,5 @@
 exclude = [
     "notebooks/",
-    "skin-cancer-lesions-segmentation-using-unet.ipynb",
 ]
 
 [lint]
