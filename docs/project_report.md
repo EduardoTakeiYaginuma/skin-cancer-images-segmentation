@@ -107,6 +107,8 @@ The trained model is deployed as a container-image **AWS Lambda function** behin
 
 The Lambda entry point (`lambda_handler.py`) downloads the classifier and segmentation checkpoints from S3 to `/tmp` on cold start, instantiates a cached predictor, and exposes the same triage contract used by the local FastAPI service. A live invocation returns a JSON body with `melanoma_prob`, `triage_zone` (`negative` / `review` / `positive`), `triage_label`, `recommended_action` and `latency_ms`.
 
+The deployment is currently reachable at `POST https://0tzj8c0o4f.execute-api.us-east-2.amazonaws.com/prod/predict`. The request body is the raw image bytes; cold-start latency is around 10-20 seconds (PyTorch and the checkpoints are pulled from S3 into `/tmp`), and warm invocations run in roughly 7-8 seconds at the configured 512 MB memory tier.
+
 In parallel, a local **FastAPI** service (`api/main.py`) provides `/health` and `/predict` endpoints for development and integration testing, and a **Streamlit** application (`app.py`) offers an interactive frontend for demonstration purposes.
 
 ---

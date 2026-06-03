@@ -160,6 +160,38 @@ Infrastructure as Code is available in two equivalent forms under `infra/`:
 - `infra/cloudformation.yaml` (AWS CloudFormation)
 - `infra/terraform/` (HashiCorp Terraform)
 
+### Live endpoint
+
+The current deployment is reachable at:
+
+```
+POST https://0tzj8c0o4f.execute-api.us-east-2.amazonaws.com/prod/predict
+```
+
+The handler expects the raw image bytes as the request body. Example:
+
+```bash
+curl -X POST "https://0tzj8c0o4f.execute-api.us-east-2.amazonaws.com/prod/predict?filename=test.jpg" \
+  -H "Content-Type: image/jpeg" \
+  --data-binary @your_image.jpg
+```
+
+Sample response:
+
+```json
+{
+  "image_id": "59f9b0be4042",
+  "melanoma_prob": 0.1675,
+  "triage_zone": "positive",
+  "triage_label": "Melanoma",
+  "headline": "Alerta alto",
+  "recommended_action": "Priorizar revisao especializada...",
+  "latency_ms": 11082.66
+}
+```
+
+First invocation can take 10-20 seconds because of the Lambda cold start (PyTorch and the model checkpoints are pulled from S3 into `/tmp`). Subsequent invocations on a warm container run inference in roughly 7-8 seconds on the configured 512 MB memory tier.
+
 ## Monitoring
 
 Statistical drift detection uses the Kolmogorov-Smirnov test (for continuous features such as predicted melanoma probability) and the Chi-squared test (for categorical features such as the assigned triage zone).
