@@ -298,12 +298,12 @@ def render_risk_bar(case: CaseAnalysis) -> None:
 
 
 _PIPELINE_STEPS = [
-    ("1 — Original", "Imagem bruta carregada"),
-    ("2 — Mascara U-Net", "Pixels de lesao (branco) identificados pelo U-Net"),
-    ("3 — Overlay", "Mascara vermelha sobreposta na imagem original"),
-    ("4 — Bounding box", "Amarelo = bbox; verde = bbox expandida com margem"),
-    ("5 — Crop + Pad", "Recorte centrado na lesao, padded para quadrado"),
-    ("6 — Entrada 224x224", "Imagem final vista pelo ResNet50"),
+    ("1: Original", "Imagem bruta carregada"),
+    ("2: Mascara U-Net", "Pixels de lesao (branco) identificados pelo U-Net"),
+    ("3: Overlay", "Mascara vermelha sobreposta na imagem original"),
+    ("4: Bounding box", "Amarelo = bbox; verde = bbox expandida com margem"),
+    ("5: Crop + Pad", "Recorte centrado na lesao, padded para quadrado"),
+    ("6: Entrada 224x224", "Imagem final vista pelo ResNet50"),
 ]
 
 
@@ -349,7 +349,7 @@ def collect_with_live_preview(uploaded_files: list, predictor: SkinCancerPredict
             )
             progress_msg.empty()
             status.update(
-                label=f"{uploaded_file.name} — {analysis.prediction.zone_label} ({analysis.prediction.probability * 100:.1f}%)",
+                label=f"{uploaded_file.name}: {analysis.prediction.zone_label} ({analysis.prediction.probability * 100:.1f}%)",
                 state="complete",
                 expanded=False,
             )
@@ -548,7 +548,7 @@ def render_outcome_indicator(case: CaseAnalysis) -> None:
     if zone == "review":
         outcome = "ZONA DE REVISAO"
         bg, color = "#fef3c7", "#92400e"
-        desc = "Zona intermediaria — o modelo nao emitiu veredicto definitivo para este caso."
+        desc = "Zona intermediaria: o modelo nao emitiu veredicto definitivo para este caso."
     elif zone == "positive" and binary == 1:
         outcome = "VERDADEIRO POSITIVO (TP)"
         bg, color = "#dcfce7", "#166534"
@@ -562,7 +562,7 @@ def render_outcome_indicator(case: CaseAnalysis) -> None:
         bg, color = "#fff7ed", "#c2410c"
         desc = "Alarme falso: o modelo alertou para melanoma, mas o caso real e benigno."
     else:
-        outcome = "FALSO NEGATIVO (FN) — CRITICO"
+        outcome = "FALSO NEGATIVO (FN): CRITICO"
         bg, color = "#fee2e2", "#b91c1c"
         desc = "Erro critico: o modelo classificou como benigno, mas o caso real e melanoma."
 
@@ -752,32 +752,32 @@ def render_pipeline_tab(case: CaseAnalysis) -> None:
 
     steps: list[tuple[str, object, str]] = [
         (
-            "1 — Original",
+            "1: Original",
             case.original_image,
             "Imagem bruta carregada (do dataset ou upload direto)",
         ),
         (
-            "2 — Mascara U-Net",
+            "2: Mascara U-Net",
             case.segmentation_mask_image,
             "Saida binaria do U-Net: branco = lesao, preto = fundo",
         ),
         (
-            "3 — Overlay da segmentacao",
+            "3: Overlay da segmentacao",
             case.segmentation_overlay,
             "Mascara em vermelho sobreposta na imagem original",
         ),
         (
-            "4 — Bounding box",
+            "4: Bounding box",
             case.lesion_bbox_image,
             "Amarelo = bbox ajustada; verde = bbox expandida com margem",
         ),
         (
-            "5 — Crop + Pad quadrado",
+            "5: Crop + Pad quadrado",
             case.classifier_source_image,
             "Recorte centrado na lesao, padded para proporcao quadrada",
         ),
         (
-            "6 — Entrada do modelo (224x224)",
+            "6: Entrada do modelo (224x224)",
             case.classifier_input_image,
             "Versao final vista pelo ResNet50",
         ),
@@ -815,7 +815,7 @@ def _make_pipeline_figure(config: dict) -> plt.Figure:
     ax.set_ylim(0, 4.8)
     ax.axis("off")
 
-    ax.text(7.5, 4.55, "Pipeline de Inferência — Visão Geral", ha="center", va="center",
+    ax.text(7.5, 4.55, "Pipeline de Inferência: Visão Geral", ha="center", va="center",
             fontsize=13, fontweight="bold", color="#0f172a")
 
     # --- Caixas do pipeline principal ---
@@ -930,12 +930,12 @@ def render_architecture_tab(config: dict) -> None:
             O problema foi reformulado como <strong>classificação binária</strong>:
             melanoma (<em>MEL</em>) vs. não-melanoma (demais classes).
             <br><br>
-            O dataset é fortemente desbalanceado — apenas ~11% das amostras são melanoma —
+            O dataset é fortemente desbalanceado (apenas ~11% das amostras são melanoma),
             o que motivou estratégias específicas de amostragem e calibração.""",
         ), unsafe_allow_html=True)
 
         st.markdown(_section(
-            "Segmentação — U-Net",
+            "Segmentação: U-Net",
             """A segmentação da lesão é realizada por uma <strong>U-Net</strong> treinada do zero,
             com arquitetura encoder–decoder e <em>skip connections</em> em 4 níveis de resolução
             (64 → 32 → 16 → 8 → 4 pixels).
@@ -951,7 +951,7 @@ def render_architecture_tab(config: dict) -> None:
 
     with col_b:
         st.markdown(_section(
-            "Classificação — ResNet50",
+            "Classificação: ResNet50",
             """O classificador é um <strong>ResNet50</strong> com pesos pré-treinados no
             ImageNet, fine-tuned no HAM10000 com a formulação binária.
             <br><br>
@@ -969,11 +969,11 @@ def render_architecture_tab(config: dict) -> None:
             "Explicabilidade",
             """Duas técnicas de explicabilidade são aplicadas sobre o classificador:
             <br><br>
-            <strong>Grad-CAM</strong> — calcula o gradiente do score de saída em relação aos
+            <strong>Grad-CAM</strong>: calcula o gradiente do score de saída em relação aos
             mapas de ativação da última camada convolucional (<code>conv_head</code>),
             produzindo um mapa de calor que destaca as regiões mais relevantes para a decisão.
             <br><br>
-            <strong>Oclusão sistemática</strong> — percorre a imagem com uma janela de 40×40 px
+            <strong>Oclusão sistemática</strong>: percorre a imagem com uma janela de 40×40 px
             (passo 28 px) substituindo cada região pela cor média local e mede a queda
             de probabilidade. Regiões cuja oclusão causa maior queda são consideradas
             as mais informativas para o modelo.""",
@@ -989,11 +989,11 @@ def render_architecture_tab(config: dict) -> None:
             O sistema de decisão usa <strong>dois thresholds</strong> em vez de um único ponto
             de corte, criando três zonas operacionais:
             <br><br>
-            <span style="color:#1d4ed8;font-weight:700;">Negativa</span> — p &lt; {t_low:.4f}:
+            <span style="color:#1d4ed8;font-weight:700;">Negativa</span>: p &lt; {t_low:.4f}:
             triagem de baixo risco; improvável ser melanoma segundo o modelo.<br>
-            <span style="color:#b45309;font-weight:700;">Revisão</span> — {t_low:.4f} ≤ p &lt; {t_high:.4f}:
+            <span style="color:#b45309;font-weight:700;">Revisão</span>: {t_low:.4f} ≤ p &lt; {t_high:.4f}:
             caso incerto; encaminhar para avaliação dermatológica.<br>
-            <span style="color:#b91c1c;font-weight:700;">Positiva</span> — p ≥ {t_high:.4f}:
+            <span style="color:#b91c1c;font-weight:700;">Positiva</span>: p ≥ {t_high:.4f}:
             alerta clínico; priorizar revisão especializada.
             <br><br>
             Os thresholds foram otimizados para atingir sensibilidade ≥ 85% para melanoma,
@@ -1023,7 +1023,7 @@ def render_architecture_tab(config: dict) -> None:
 
     st.markdown("")
     st.caption(
-        "Ferramenta desenvolvida para fins acadêmicos (Insper — MLOps). "
+        "Ferramenta desenvolvida para fins acadêmicos (Insper: MLOps). "
         "Não substitui avaliação dermatológica clínica."
     )
 

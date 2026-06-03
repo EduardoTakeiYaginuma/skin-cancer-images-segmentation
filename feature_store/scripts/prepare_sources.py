@@ -80,7 +80,7 @@ def prepare_classification_source() -> None:
     out_path = SOURCES_DIR / "lesion_classification.parquet"
     table = pa.Table.from_pandas(combined, schema=schema, preserve_index=False)
     pq.write_table(table, out_path)
-    print(f"[OK] lesion_classification.parquet — {len(combined)} registros → {out_path}")
+    print(f"[OK] lesion_classification.parquet: {len(combined)} registros → {out_path}")
 
 
 def prepare_preprocessing_source() -> None:
@@ -120,7 +120,7 @@ def prepare_preprocessing_source() -> None:
     out_path = SOURCES_DIR / "preprocessing_stats.parquet"
     table = pa.Table.from_pandas(df, schema=schema, preserve_index=False)
     pq.write_table(table, out_path)
-    print(f"[OK] preprocessing_stats.parquet — {len(df)} registros → {out_path}")
+    print(f"[OK] preprocessing_stats.parquet: {len(df)} registros → {out_path}")
 
 
 if __name__ == "__main__":

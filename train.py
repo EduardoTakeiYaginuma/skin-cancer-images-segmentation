@@ -1,4 +1,4 @@
-"""Standalone training script — ResNet50 base_224x224 com MLflow tracking."""
+"""Standalone training script: ResNet50 base_224x224 com MLflow tracking."""
 from __future__ import annotations
 
 import io
@@ -29,7 +29,7 @@ load_dotenv()
 REPO_ROOT = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------------------------
-# Hiperparâmetros (espelha o notebook 04_modeling — ResNet50 base_224x224)
+# Hiperparâmetros (espelha o notebook 04_modeling: ResNet50 base_224x224)
 # ---------------------------------------------------------------------------
 SEED = 42
 IMAGE_SIZE = 224
@@ -312,7 +312,7 @@ def main() -> None:
         merged = df_.merge(treated, on="image_id", how="left")
         missing = merged["export_path"].isna().sum()
         if missing:
-            raise ValueError(f"{missing} amostras sem imagem tratada — rode 02_preprocessing.ipynb")
+            raise ValueError(f"{missing} amostras sem imagem tratada: rode 02_preprocessing.ipynb")
         df_["img_path"] = merged["export_path"].values
 
     # Downsampling da classe negativa no treino (ratio 1:3)
@@ -403,7 +403,7 @@ def main() -> None:
               f"spec={test_m['specificity']:.4f} | FN={test_m['fn']}")
 
         # Artefatos visuais
-        mlflow.log_image(plt.imread(io.BytesIO(_roc_png(test_labels, test_probs, "ROC — Test Set"))),
+        mlflow.log_image(plt.imread(io.BytesIO(_roc_png(test_labels, test_probs, "ROC: Test Set"))),
                          artifact_file="roc_curve_test.png")
         mlflow.log_image(plt.imread(io.BytesIO(_cm_png(test_labels, test_m["preds"]))),
                          artifact_file="confusion_matrix_test.png")
@@ -446,7 +446,7 @@ def main() -> None:
             )
             print(f"Modelo v{latest} promovido para 'production'.")
         else:
-            print(f"AUC {test_m['auc']:.4f} < 0.85 — modelo NÃO promovido.")
+            print(f"AUC {test_m['auc']:.4f} < 0.85: modelo NÃO promovido.")
 
 
 if __name__ == "__main__":

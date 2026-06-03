@@ -1,4 +1,4 @@
-"""Standalone evaluation script — loads best MLflow model and writes metrics.json."""
+"""Standalone evaluation script: loads best MLflow model and writes metrics.json."""
 from __future__ import annotations
 
 import json

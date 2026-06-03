@@ -50,11 +50,11 @@ def run(drift_results: dict, dry_run: bool = False) -> None:
     needs_retrain, drifted_features = should_retrain(drift_results)
 
     if not needs_retrain:
-        logger.info("✓ Sem drift — re-treino não necessário.")
+        logger.info("✓ Sem drift: re-treino não necessário.")
         return
 
     logger.warning(
-        "⚠ Drift detectado em: %s — iniciando re-treino automático.",
+        "⚠ Drift detectado em: %s: iniciando re-treino automático.",
         ", ".join(drifted_features),
     )
 

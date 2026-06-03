@@ -9,7 +9,7 @@ PARQUET_DIR = Path(__file__).resolve().parent.parent / "feature_store" / "data" 
 
 @pytest.mark.skipif(
     not (PARQUET_DIR / "lesion_classification.parquet").exists(),
-    reason="Parquets não gerados — execute prepare_sources.py primeiro.",
+    reason="Parquets não gerados: execute prepare_sources.py primeiro.",
 )
 def test_lesion_classification_schema() -> None:
     import pyarrow.parquet as pq
@@ -21,7 +21,7 @@ def test_lesion_classification_schema() -> None:
 
 @pytest.mark.skipif(
     not (PARQUET_DIR / "preprocessing_stats.parquet").exists(),
-    reason="Parquets não gerados — execute prepare_sources.py primeiro.",
+    reason="Parquets não gerados: execute prepare_sources.py primeiro.",
 )
 def test_preprocessing_stats_schema() -> None:
     import pyarrow.parquet as pq

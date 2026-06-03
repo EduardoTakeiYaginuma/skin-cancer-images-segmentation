@@ -100,7 +100,7 @@ def _plot_histogram(ref: np.ndarray, cur: np.ndarray, name: str, result: dict, p
     ax.hist(ref, bins=30, alpha=0.55, label="Referência (treino)", density=True)
     ax.hist(cur, bins=30, alpha=0.55, label="Produção", density=True)
     status = "DRIFT DETECTADO" if result["drift_detected"] else "sem drift"
-    ax.set_title(f"{name}  —  KS p={result['p_value']:.4f}  ({status})")
+    ax.set_title(f"{name} :  KS p={result['p_value']:.4f}  ({status})")
     ax.set_xlabel(name)
     ax.set_ylabel("Densidade")
     ax.legend()
@@ -123,7 +123,7 @@ def _plot_bar(ref: pd.Series, cur: pd.Series, result: dict, path: Path) -> None:
     ax.bar(x - width / 2, ref_pct, width, label="Referência (treino)")
     ax.bar(x + width / 2, cur_pct, width, label="Produção")
     status = "DRIFT DETECTADO" if result["drift_detected"] else "sem drift"
-    ax.set_title(f"triage_zone  —  χ² p={result['p_value']:.4f}  ({status})")
+    ax.set_title(f"triage_zone :  χ² p={result['p_value']:.4f}  ({status})")
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
     ax.set_ylabel("Proporção")
