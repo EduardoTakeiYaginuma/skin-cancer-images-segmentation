@@ -166,15 +166,15 @@ The trigger supports a `--dry-run` flag so that the monitoring job can run in ob
 
 ## 13. Reproducibility
 
-A new contributor can bring up the project end-to-end with the following sequence, fully documented in the repository's `README.md`:
+The repository is designed to be inspected and run on three different levels of access, and each level is documented explicitly in `README.md`.
 
-1. Clone the repository.
-2. `pip install -r requirements.txt` (or use the provided `Dockerfile` for a sealed environment).
-3. `dvc pull` to fetch the dataset and model checkpoints from the S3 remote.
-4. `dvc repro` to rebuild the preprocessing, training and evaluation pipeline.
-5. `uvicorn api.main:app` to run the local FastAPI service, or `streamlit run app.py` to run the demo UI.
+**Read-only inspection (no dataset required).** The five Jupyter notebooks under `notebooks/` are committed with their output cells preserved, so the EDA, the U-Net segmentation experiment, the preprocessing pipeline and the modeling benchmarks are reviewable by opening the files directly. The CI workflow proves that the test suite, the linter and the Docker image build all succeed on a clean Ubuntu runner without any dataset present.
 
-The repository ships four scoped `requirements*.txt` files (base, API-only, CI, Lambda) so that each environment installs only what it actually needs, and a `Dockerfile` plus `Dockerfile.lambda` for hermetic builds.
+**External reproduction (no S3 access).** HAM10000 is publicly available on Kaggle and on the ISIC Archive, and `README.md` links both sources. The train / validation / test split CSVs under `data/metadata/` are committed directly to git, so an external user only needs to download the HAM10000 release and place the files under `data/` to reproduce the same data partitioning used in training.
+
+**Full reproduction by team members.** Members with access to the project S3 remote run `dvc pull` to fetch the dataset and model checkpoints, and `dvc repro` to rebuild the preprocessing, training and evaluation pipeline. The DVC stages declare their `deps`, `outs` and `params`, so the pipeline rebuilds incrementally when only some inputs change.
+
+To support every layer, the repository ships four scoped `requirements*.txt` files (base, API-only, CI, Lambda) so that each environment installs only what it actually needs, and a `Dockerfile` plus `Dockerfile.lambda` for hermetic builds.
 
 ---
 
