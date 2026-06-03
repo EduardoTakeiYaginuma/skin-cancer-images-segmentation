@@ -100,18 +100,19 @@ streamlit run app.py
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Download HAM10000 manually from the public sources listed above
-#    and place the files under data/ following the layout described
-#    in the Dataset section.
+# 2. Download HAM10000 (images + masks + metadata) into data/
+#    Requires a free Kaggle account with API token at ~/.kaggle/kaggle.json
+#    (token instructions: https://github.com/Kaggle/kaggle-api#api-credentials)
+python scripts/download_dataset.py
 
-# 3. Run the test suite, lint and Docker build (work without the dataset)
+# 3. Run the test suite, lint and Docker build (work even without the dataset)
 pytest tests/ -v
 ruff check .
 docker build -f Dockerfile -t melanoma-api:dev .
 
-# 4. To run the pipeline end-to-end, you must additionally execute
-#    notebooks/03_preprocessing.ipynb so that the JSON artifacts under
-#    notebooks/outputs/preprocessing/ (referenced by dvc.yaml) exist.
+# 4. To run the pipeline end-to-end, also execute notebooks/03_preprocessing.ipynb
+#    so the JSON artifacts under notebooks/outputs/preprocessing/ exist
+#    (they are referenced by dvc.yaml).
 ```
 
 ## Reproducing the pipeline
