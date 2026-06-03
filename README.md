@@ -70,11 +70,24 @@ The split CSVs under `data/metadata/` are committed directly to git. The heavy d
 └── requirements*.txt     # base / api / ci / lambda
 ```
 
-## What works without the dataset
+## What runs out of the box for anyone who clones the repo
 
-The repository is fully readable even without the dataset. The five Jupyter notebooks under `notebooks/` are committed with their output cells preserved, so the EDA, the U-Net segmentation experiment, the preprocessing pipeline and the modeling benchmarks can be reviewed by simply opening them. The test suite, the linter and the Docker build run on every CI push and do not depend on the dataset.
+The repository is designed so that a fresh clone is usable without any external credentials.
 
-What requires the dataset: the live FastAPI / Streamlit / Lambda inference (needs the model checkpoints) and the full DVC pipeline (`dvc repro`).
+| Operation | Works on a fresh clone? |
+|---|---|
+| Read the report and all five Jupyter notebooks (outputs are committed) | yes |
+| Run the test suite (`pytest tests/ -v`) | yes |
+| Run the linter (`ruff check .`) | yes |
+| Build the Docker image (`docker build -f Dockerfile`) | yes |
+| Download the public dataset (`python scripts/download_dataset.py`) | yes, with a free Kaggle account |
+| Run the notebooks from scratch with the downloaded dataset | yes |
+| Train the model from scratch (`python train.py`) | yes, but takes hours without a GPU |
+| Run `dvc repro` end-to-end | yes, after downloading the dataset and running notebook 03 |
+| Hit the deployed Lambda endpoint with a real image | yes, the API Gateway URL is public |
+| Run the local FastAPI / Streamlit with real inference | only if the user trained their own checkpoint, or has access to the team's DVC remote |
+
+The pretrained model checkpoints (~459 MB) live on the team's private S3 (versioned via DVC) and are not redistributed in the repository. External users who need inference locally either retrain (the recipe is in `train.py`) or call the public Lambda endpoint.
 
 ## Setup
 
