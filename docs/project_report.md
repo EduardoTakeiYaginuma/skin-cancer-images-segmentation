@@ -1,242 +1,210 @@
-# Binary Melanoma Screening from Dermatoscopic Images
+# MLOps Final Project Report — Binary Melanoma Screening
 
-**Artificial Intelligence in Medicine and Healthcare**
+**Authors:** Gabriel Fernando Missaka Mendes | Eduardo Takei Yaginuma
+**Course:** MLOps — Insper (26.1)
+**Repository:** [`insper-classroom/26-1-mlops-project-gabriel-e-edu`](https://github.com/insper-classroom/26-1-mlops-project-gabriel-e-edu)
 
-**Authors**
+---
 
-- Eduardo Takei Yaginuma
-- Gabriel Fernando Mendes Missaka
+## 1. Introduction
 
-## Project Report
+Melanoma is the most aggressive form of skin cancer, and early triage from dermatoscopic images can have direct clinical impact. While accurate models exist, the gap between a trained notebook and a model that is auditable, reproducible, observable, and safely deployable is the actual blocker to clinical adoption.
 
-### Introduction
+This project takes an existing binary-classification model (melanoma vs. non-melanoma) and **operationalizes it end-to-end**, applying the full MLOps stack required by the Insper rubric: experiment tracking, data versioning, feature store, automated deployment pipeline, infrastructure as code, structured logging, continuous integration, production monitoring with statistical drift detection, and automatic retraining on degradation. The goal of the project is not to push the state of the art on the modeling side, but to demonstrate professional operationalization of a non-trivial deep-learning model.
 
-#### Problem Background
+---
 
-Cutaneous melanoma is the most aggressive and life-threatening form of skin cancer, accounting for a small proportion of cases (approximately 1%–4%) but responsible for over 80% of skin cancer-related deaths (American Cancer Society, 2024; Vieira & Brandão, 2022). Its high mortality is primarily associated with its strong metastatic potential, particularly after the transition from radial to vertical growth, enabling invasion into deeper skin layers and access to vascular systems (Caraviello et al., 2025).
+## 2. Dataset, Storage and Preprocessing
 
-Early detection is critical for improving patient outcomes. When diagnosed at a localized stage, melanoma presents a 5-year survival rate above 99%, which drops to approximately 35% in cases of distant metastasis (American Cancer Society, 2024). However, accurate diagnosis remains challenging even for experienced dermatologists due to the visual similarity between malignant and benign lesions.
+### 2.1 Data Collection and Storage
 
-In this context, computational tools based on artificial intelligence can support clinical decision-making, particularly by reducing false negatives, which represent the most critical diagnostic error in melanoma screening.
+The project uses the **HAM10000** dataset (Human Against Machine with 10,000 training images) from the ISIC archive, comprising **10,015 dermatoscopic images** annotated across seven diagnostic classes (`MEL`, `NV`, `BCC`, `AKIEC`, `BKL`, `DF`, `VASC`), together with binary segmentation masks for each lesion.
 
-#### Project Proposal
+The raw dataset (`data/images/`, `data/masks/`, `data/metadata.csv`) and the precomputed train/val/test splits (`data/metadata/*_split.csv`) are tracked locally with `.dvc` pointer files. Heavy binary content lives in an S3 remote configured via `.dvc/config`; this allows any contributor to reproduce the data state with a single `dvc pull`, without bloating Git history with multi-gigabyte assets.
 
-This project proposes the development of a deep learning-based system for binary classification of dermatoscopic images, distinguishing melanoma from non-melanoma lesions.
+### 2.2 Preprocessing Pipeline
 
-Instead of addressing a multi-class classification problem, the task is reformulated into a binary setting, grouping all non-melanoma categories (e.g., basal cell carcinoma, benign keratosis, nevi) into a single class. This approach aligns with clinical priorities, focusing specifically on detecting melanoma due to its high lethality.
+The preprocessing pipeline is declared in `dvc.yaml` as a three-stage DAG:
 
-Special emphasis will be placed on challenging negative samples, lesions that visually resemble melanoma to improve model robustness and reduce false negatives.
+- **`preprocess`** — runs `notebooks/03_preprocessing.ipynb` converted to a script. It performs (i) mask-guided cropping centered on the lesion, (ii) per-channel normalization using statistics computed once and persisted to `notebooks/outputs/preprocessing/normalization_stats.json`, (iii) resizing to `224×224` for the classifier and `64×64` for the segmentation model, and (iv) emits a `treated_manifest.csv` describing each exported sample.
+- **`train`** — runs `train.py` using the treated manifest, the normalization stats and the splits as DVC dependencies. Output: a tracked MLflow run with the trained checkpoint.
+- **`evaluate`** — runs `evaluate.py` against the held-out test split and writes `metrics.json` as a DVC-tracked metric file.
 
-The system will be trained and evaluated using the HAM10000 dataset, with labels adapted to a binary setting. Given the clinical objective, sensitivity (recall) will be prioritized as the primary evaluation metric, ensuring that melanoma cases are correctly identified.
+Because every stage declares its `deps`, `outs` and (where relevant) `params`, the pipeline is fully reproducible: changing a preprocessing parameter in `params.yaml` invalidates only the downstream stages, and `dvc repro` can run the minimum required work.
 
-To align model predictions with clinical use, the classification threshold will be selected based on maximizing sensitivity while maintaining a minimum acceptable level of specificity, ensuring a balance between early detection and false positive control.
+### 2.3 Class Balancing Strategy
 
-Secondary metrics such as specificity and AUC-ROC will be used to provide a comprehensive evaluation of model performance.
+Melanoma represents only ~11% of HAM10000 (1,113 of 10,015 images). The training procedure addresses this in two complementary ways: at the data layer, the non-melanoma class is downsampled to a 3:1 ratio relative to melanoma when building the effective training set; at the loader layer, a `WeightedRandomSampler` increases the sampling probability of melanoma cases and adds an extra multiplier to the melanocytic nevus (`NV`) class, which is the visually hardest negative.
 
-### Dataset
+---
 
-The HAM10000 dataset contains 10,015 dermatoscopic images of pigmented skin lesions categorized into seven diagnostic classes. For this project, the dataset is reformulated into a binary classification task: melanoma (positive class) versus non-melanoma (negative class).
+## 3. Model
 
-A key characteristic of the dataset is its class imbalance, with melanoma cases representing a minority. This reflects real-world clinical distributions and must be addressed during training.
+The classifier is a **ResNet50** initialized with ImageNet weights and fine-tuned end-to-end for binary classification with a single sigmoid output. The loss is `BCEWithLogitsLoss`; optimization uses AdamW with cosine annealing and early stopping on validation AUC.
 
-The dataset also includes metadata such as age, sex, and anatomical site, which may be used for further analysis or bias assessment.
+To support clinical triage rather than a hard binary decision, the model exposes **three zones** via a dual-threshold strategy. A high threshold `T_HIGH` is selected on the validation set as the value that achieves at least 85% sensitivity while preserving an acceptable specificity floor. A low threshold `T_LOW` is set at the 2nd percentile of melanoma probabilities on the validation set. Predictions below `T_LOW` are routed to the automatic-dismissal zone ("negative"), predictions above `T_HIGH` to the high-risk zone ("positive"), and the remaining cases to a manual-review zone ("review"). Both thresholds are persisted alongside the checkpoint so the serving layer applies the same operating point used at training time.
 
-Additionally, a segmentation variant of the dataset provides lesion masks. In this project, segmentation will be treated as an optional preprocessing step, used to isolate the region of interest and reduce background noise. It is not treated as a separate modeling task.
+The final selected configuration is **ResNet50 with online augmentation at 224×224**, with a test AUC of **0.9128** and a melanoma capture rate of 85.6% in the high-confidence zone.
 
-### Implementation and Deployment
+---
 
-The implementation prioritizes reproducibility, clarity, and modularity.
+## 4. MLOps Architecture Overview
 
-#### Data Analysis and Preprocessing
+The operational stack is composed of seven layers, each addressing one or more rubric items:
 
-An exploratory data analysis (EDA) will be conducted to assess class distribution, metadata patterns, and potential biases. Preprocessing steps include resizing, normalization, artifact removal, and data augmentation techniques such as rotation and flipping.
+| Layer | Tool | Rubric item served |
+|---|---|---|
+| Data versioning | DVC + S3 remote | Data versioning (C) |
+| Feature store | Feast (SQLite registry + online/offline store) | Feature store (C) |
+| Experiment tracking | MLflow + Model Registry | MLOps framework (B/A) |
+| Deployment pipeline | `deploy_lambda.sh` → ECR → AWS Lambda | Automated deployment pipeline (B/A) |
+| Infrastructure as Code | CloudFormation **and** Terraform | IaC (B/A) |
+| Production monitoring | KS + Chi² drift report (scipy), cron-scheduled | Monitor performance in production (B/A) |
+| Degradation handling | `retrain_trigger.py` → `dvc repro --force` | Deals with degradation (B/A) |
+| Continuous integration | GitHub Actions (lint + tests + docker build + cron monitoring) | Project runs without errors (C) |
+| Structured logging | `python-json-logger` | Uses logging (C) |
 
-If segmentation masks are used, they will be applied during preprocessing to focus the model on lesion regions, improving feature extraction without introducing a separate segmentation model.
+---
 
-#### Development
+## 5. Experiment Tracking — MLflow
 
-The codebase will be version-controlled using GitHub to ensure reproducibility and experiment tracking.
+All training runs are tracked with MLflow. The tracking URI and experiment name are centralized in `mlflow_config.py`; the URI defaults to a local SQLite backend and can be overridden via the `MLFLOW_TRACKING_URI` environment variable to point at a managed tracking server.
 
-#### Deployment Considerations
+For each run, `train.py` logs the full set of hyperparameters (model architecture, image size, batch size, learning rate, epochs, augmentation flag, random seed and target device), per-epoch metrics (`train_loss`, `train_auc`, `val_loss`, `val_auc`), end-of-run test metrics (`test_auc`, `test_sensitivity`, `test_specificity`, `test_precision`, `test_f1`, `test_f2`), and two visual artifacts: the ROC curve and the confusion matrix.
 
-The integration of the model into a web application (e.g., using Flask or Streamlit) is considered a future step, intended to demonstrate real-world applicability. Similarly, features such as real-time image capture via camera will be treated as possible extensions, rather than core deliverables of this project.
+The trained model is also registered in the **MLflow Model Registry** under the name `melanoma-classifier`. When the test AUC exceeds the production-promotion threshold of 0.85, the new version is automatically tagged with the `production` alias using `MlflowClient.set_registered_model_alias`. The inference config JSON (containing `T_LOW`, `T_HIGH`, normalization stats and metric snapshot) is logged as a run artifact so that the serving layer can always reproduce the exact operating point of the checkpoint it loads.
 
-### Modeling
+---
 
-The modeling stage focuses on developing a robust deep learning approach for binary classification of dermatoscopic images (melanoma vs non-melanoma). Based on an initial review of existing implementations and Kaggle benchmarks, particular emphasis will be placed on architectures incorporating U-Net, which demonstrated strong performance in related tasks. In this project, U-Net will be primarily explored as a segmentation-based preprocessing strategy, allowing the model to focus on lesion regions before classification.
+## 6. Data Versioning and Feature Store
 
-In addition to this approach, transfer learning will be applied using pre-trained convolutional neural networks such as ResNet50 and EfficientNet, which will serve as baseline and comparative models. These architectures are widely adopted in medical image classification due to their ability to capture hierarchical visual features.
+The project satisfies the data-versioning rubric requirement **twice**, deliberately.
 
-For classification, the final layers of these networks will be adapted to output a single probability score using a sigmoid activation function. The training process will follow a two-stage strategy: initial training with frozen convolutional layers to preserve general features, followed by fine-tuning of deeper layers to learn domain-specific patterns present in dermatoscopic images.
+### 6.1 DVC
 
-To address class imbalance, techniques such as class weighting or focal loss will be employed, ensuring greater emphasis on melanoma cases during training. Data augmentation strategies and regularization methods, including dropout and early stopping, will be used to improve generalization and reduce overfitting.
+`dvc.yaml` defines the data + training pipeline; the S3 remote (`.dvc/config`) stores the actual binaries. The combination of `params.yaml` (pipeline parameters), DVC dependency tracking and remote storage means that a new contributor can rebuild any historical state of the dataset with `dvc pull && dvc repro <stage>`.
 
-If segmentation is applied, it will be incorporated strictly as a preprocessing step, ensuring that the overall pipeline remains a classification task rather than a separate segmentation problem.
+### 6.2 Feast
 
-### Evaluation Strategy
+A complementary feature store is implemented under `feature_store/feature_repo/`. Two feature views materialize information per `image_id`:
 
-Model performance will be evaluated with a strong emphasis on sensitivity (recall), aiming to minimize false negatives due to their clinical impact. The classification threshold will not be fixed at 0.5; instead, it will be selected based on validation data, prioritizing high sensitivity while maintaining a minimum acceptable level of specificity.
+- **`lesion_classification`** — the 7-way one-hot encoding plus the binary label and the split identifier, sourced from the train/val/test split CSVs.
+- **`preprocessing_stats`** — per-image final dimensions, mask coverage after cropping, and hair-pixel count, sourced from the preprocessing manifest.
 
-To ensure a reliable and unbiased evaluation, the dataset will be split into training, validation, and test sets, with a portion of the images held out exclusively for final testing. This test set will not be used during model training or hyperparameter tuning, allowing for a fair assessment of the model's generalization performance.
+The registry uses SQLite, the online store is SQLite, and the offline store is a file provider. A `melanoma_serving_features` feature service exposes only the preprocessing stats for online retrieval, while `melanoma_training_features` exposes the full set for offline training. Scripts under `feature_store/scripts/` cover the full lifecycle: `prepare_sources.py` converts the project CSVs to Parquet, `apply_registry.py` runs `feast apply`, `get_historical_features.py` retrieves the training set, and `materialize_online.py` warms the online store.
 
-Additionally, AUC-ROC will be used to assess performance across different thresholds, and model calibration may be considered to improve the reliability of predicted probabilities.
+---
 
-### Project Organization and Authors' Contributions
+## 7. Deployment Pipeline
 
-The project is organized into five development sprints to ensure a structured and iterative workflow, while also reflecting a clear division of responsibilities between the authors.
+The trained model is deployed as a container-image **AWS Lambda function** behind an HTTP API Gateway v2. The pipeline is automated end-to-end by `scripts/deploy_lambda.sh`:
 
-#### Sprint 1 – Data Exploration
+1. Authenticate Docker against ECR.
+2. Create the ECR repository if it does not exist.
+3. Build the Lambda image from `Dockerfile.lambda` (Python 3.11 base image, PyTorch CPU wheels, OpenCV system libraries).
+4. Tag and push the image to ECR.
+5. Either create the Lambda function (first run) or update its image (subsequent runs) via `aws lambda create-function` / `update-function-code`.
 
-- Exploratory Data Analysis (EDA)
-- Analysis of class distribution and imbalance
-- Inspection of image quality and resolution
-- Exploration of metadata (age, sex, anatomical site)
-- Identification of potential biases and data issues
+The Lambda entry point (`lambda_handler.py`) downloads the classifier and segmentation checkpoints from S3 to `/tmp` on cold start, instantiates a cached predictor, and exposes the same triage contract used by the local FastAPI service. A live invocation returns a JSON body with `melanoma_prob`, `triage_zone` (`negative` / `review` / `positive`), `triage_label`, `recommended_action` and `latency_ms`.
 
-#### Sprint 2 – Feature Engineering and Preprocessing
+In parallel, a local **FastAPI** service (`api/main.py`) provides `/health` and `/predict` endpoints for development and integration testing, and a **Streamlit** application (`app.py`) offers an interactive frontend for demonstration purposes.
 
-- Image resizing and normalization
-- Data augmentation (rotation, flipping, color transformations)
-- Artifact and noise reduction (e.g., hair removal)
-- Optional application of segmentation masks as a preprocessing step
-- Dataset splitting (train, validation, test)
+---
 
-#### Sprint 3 – Modeling
+## 8. Infrastructure as Code
 
-- Selection of baseline architecture (e.g., ResNet50, EfficientNet)
-- Implementation of transfer learning
-- Training with frozen layers and fine-tuning
-- Handling class imbalance (class weights or focal loss)
-- Initial model training and baseline performance assessment
+Infrastructure is described declaratively in **two equivalent IaC implementations**, both maintained under `infra/`:
 
-#### Sprint 4 – Validation and Optimization
+- **`infra/cloudformation.yaml`** — AWS CloudFormation template that provisions the Lambda function (image package, IAM role, S3 read access, configurable memory and timeout), the HTTP API Gateway v2 instance, the `AWS_PROXY` integration, the `POST /predict` route, the `prod` stage and the resource-based permission allowing API Gateway to invoke the Lambda.
+- **`infra/terraform/`** — a Terraform module (`main.tf`, `variables.tf`, `outputs.tf`) provisioning the same set of resources via the `hashicorp/aws` provider, validated with `terraform validate`.
 
-- Hyperparameter tuning
-- Threshold selection prioritizing sensitivity with minimum specificity
-- Performance evaluation using validation set (Recall, Specificity, AUC-ROC)
-- Error analysis and model refinement
-- Regularization strategies (dropout, early stopping)
+Both implementations are fully parameterized (region, ECR image URI, Lambda role ARN, model S3 bucket, memory size, timeout), so the entire production environment can be stood up or torn down with a single command.
 
-#### Sprint 5 – Testing and Finalization
+---
 
-- Final evaluation on a held-out test set
-- Analysis of generalization performance
-- Model calibration (if applicable)
-- Documentation and preparation of the final report
-- Optional deployment as a web application (future work)
+## 9. Logging
 
-The project tasks were divided to ensure both specialization and collaboration across all stages of development. Gabriel Fernando Mendes Missaka led the data exploration and feature engineering phases, including exploratory data analysis, dataset preprocessing, and the design of data augmentation strategies. Eduardo Takei Yaginuma was primarily responsible for the modeling, validation, and testing stages, including the implementation of deep learning architectures, training procedures, and performance evaluation.
+Structured logging is implemented in `skin_app/logging_config.py` using `python-json-logger`. The configured handler emits one JSON object per log record with fields `timestamp`, `level`, `module` and `message`, suitable for ingestion by any modern log aggregator (CloudWatch Logs Insights, Elasticsearch, Datadog, etc.) without further parsing.
 
-Both authors collaborated across all stages of the project, contributing to decision-making, experimental design, and iterative improvements to the data pipeline and model performance.
+The same logger is reused across the FastAPI service (`api/main.py`), the Lambda handler (`lambda_handler.py`), and the monitoring entry points (`monitoring/drift_detector.py`, `monitoring/retrain_trigger.py`, `monitoring/run_monitoring.py`). This ensures consistent log shape regardless of execution environment.
 
-## Development
+---
 
-### Sprint 1 - Data Exploration
+## 10. Continuous Integration
 
-The first sprint focused on problem contextualization, dataset acquisition, and initial exploratory data analysis. Initially, a literature review was conducted to better understand the clinical relevance of melanoma detection, its diagnostic challenges, and the role of artificial intelligence in supporting early diagnosis. This step was essential to properly frame the problem and justify the choice of a binary classification approach centered on melanoma detection.
+The repository ships a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on every push and pull request, and additionally on a weekly cron schedule. The workflow contains four jobs:
 
-From a technical perspective, the project repository was created to ensure proper version control and reproducibility. The HAM10000 dataset was then obtained from Kaggle and organized for analysis. An initial data exploration phase was conducted to better understand the dataset's structure, class distribution, and visual characteristics.
+- **`lint`** — runs `ruff check .` against the entire codebase.
+- **`test`** — installs PyTorch CPU wheels and the project's CI requirements, then runs `pytest tests/ -v`. The suite covers FastAPI endpoint contracts (with a mocked predictor), the preprocessing utility functions, and the Feast Parquet schema. Current status: 17 tests collected, 15 passing, 2 skipped (the skipped tests require artifacts generated by the preprocessing notebook).
+- **`docker-build`** — verifies that the production Dockerfile builds without errors on a clean Ubuntu runner.
+- **`monitoring`** — scheduled job (cron `0 9 * * 1`, i.e., every Monday at 09:00) that runs the drift detection report and uploads the artifacts so degradation is visible without manual intervention.
 
-The HAM10000 dataset contains 10,015 dermatoscopic images categorized into seven diagnostic classes, which were reformulated into a binary classification problem (melanoma vs non-melanoma) to align with clinical priorities. A key finding from the analysis is the severe class imbalance: melanoma represents only 11.1% of the dataset (1,113 images), while non-melanoma accounts for 88.9% (8,902 images), resulting in an approximate ratio of 8:1. This imbalance has significant implications for modeling, as it can bias the model toward the majority class. Therefore, accuracy alone is not a sufficient metric, and greater emphasis must be placed on sensitivity, recall, and AUC. Additionally, techniques such as class weighting, focal loss, and targeted data augmentation will be necessary to ensure adequate performance in detecting melanoma cases.
+The same workflow runs on both the working repository and the Insper Classroom repository. All recent pushes have completed green.
 
-Within the non-melanoma group, melanocytic nevi (NV) dominate, representing approximately 67% of the total dataset. This class is particularly important because it constitutes the main set of hard negatives, as nevi can be visually very similar to melanomas. This observation highlights the need for models capable of capturing subtle visual patterns such as irregular borders, texture variations, and pigment distribution, rather than relying on coarse differences between classes.
+---
 
-Qualitative inspection of the images revealed high intra-class variability, including differences in color, texture, lesion shape, and the presence of artifacts such as hair, reflections, and uneven illumination. While this variability increases the complexity of the task, it also makes the dataset more representative of real-world conditions, which is beneficial for model generalization.
+## 11. Production Monitoring
 
-Another relevant finding is that all images share a standardized resolution of 600×450 pixels, simplifying preprocessing decisions and allowing resizing to be treated as a design choice rather than a requirement. Analysis of pixel intensity distributions (mean and standard deviation in RGB channels) showed that melanoma and non-melanoma images have similar global color statistics, indicating that the classification task cannot rely on simple color or brightness differences, but instead requires learning more complex morphological and textural features.
+Once a model is live, drift is the operational risk that matters most. `monitoring/drift_detector.py` compares a reference distribution (typically taken from the training period) against a current distribution (taken from recent production predictions) using two complementary statistical tests:
 
-The dataset also provides segmentation masks for lesion regions, which represent a valuable additional resource. These masks can be used as an optional preprocessing step to isolate the lesion area and reduce background noise, potentially improving model performance without introducing a separate segmentation model.
+- **Kolmogorov–Smirnov** on continuous features (e.g. the predicted melanoma probability), to detect a shift in the full predictive distribution. The KS test is non-parametric and sensitive to both location and shape changes.
+- **Chi-squared** on categorical features (e.g. the assigned triage zone with categories `negative` / `review` / `positive`), to detect distributional shifts in the discrete output buckets that the downstream clinical workflow depends on.
 
-All activities in this sprint were conducted collaboratively through online meetings and in-person discussions, ensuring continuous alignment between both authors. While both contributors participated in all stages of the sprint, Gabriel Fernando Mendes Missaka focused more on literature research and project organization, including structuring the repository and documentation. Eduardo Takei Yaginuma contributed primarily to environment setup and led the initial data exploration and analysis process.
+Both tests use a significance level of 0.05. For each evaluated feature, the detector writes a `drift_summary.json` containing the test statistic, p-value, drift flag, alpha, and (for the categorical case) the full reference and current contingency tables. The detector additionally renders two PNG visualizations (histogram for the continuous feature, bar plot for the categorical feature) so that the report is both machine- and human-readable.
 
-Overall, the data exploration phase indicates that the dataset is realistic and challenging, with significant class imbalance, high visual variability, and subtle inter-class differences. These findings directly inform the modeling strategy, emphasizing the need for robust architectures, appropriate handling of class imbalance, careful preprocessing, and evaluation metrics aligned with clinical priorities.
+The monitoring entry point (`monitoring/run_monitoring.py`) supports both real production data (CSV inputs) and synthetic data with a configurable distribution shift, which is useful for demonstrating the alarm in a controlled way. Three example reports are committed under `monitoring/reports/`.
 
-### Sprint 2 - Preprocessing
+---
 
-The second sprint began with a concern that emerged directly from the first exploratory analyses: the number of melanoma images available for training was still limited for a clinically sensitive binary classification problem. Because melanoma is the positive class and also the most important class from the medical point of view, this limitation represented a concrete risk for model learning, evaluation stability, and generalization.
+## 12. Handling Performance Degradation
 
-To address this issue, we searched for a larger alternative dataset and temporarily migrated the pipeline to a new source that was roughly twenty times larger in total volume. The expectation was that a much larger dataset would substantially increase the number of melanoma samples and therefore justify a change in the data pipeline. However, the additional exploration showed that, despite the strong increase in the total number of images (`20x`), the number of melanoma examples available for our use case increased only marginally, on the order of about one hundred additional positive samples. In practice, this meant that the cost of changing dataset structure, metadata format, and preprocessing assumptions was not compensated by a meaningful gain in the positive class.
+When the drift detector flags one or more features, `monitoring/retrain_trigger.py` is responsible for the response. Its logic is intentionally minimal: read the drift summary, determine the set of drifted features, and (i) write a structured JSON-Lines entry to `monitoring/retrain_log.jsonl` for audit purposes and (ii) invoke `dvc repro --force` to rebuild the data and training pipelines from scratch using the current data state.
 
-Based on this finding, we decided to return to the original dataset and focus on extracting more value from it through preprocessing and controlled augmentation. This decision was motivated by two advantages of the original source. First, it already had a cleaner structure for the project objective, with images, masks, and labels directly aligned. Second, it provided lesion segmentation masks, which made it possible to build a lesion-aware preprocessing pipeline instead of relying only on full-image resizing.
+The trigger supports a `--dry-run` flag so that the monitoring job can run in observation mode in CI without consuming compute, and a live flag to perform the actual retraining when desired. The full chain — *drift detected → log → DVC repro → MLflow registered → conditional production promotion* — closes the operational loop without manual intervention.
 
-The final preprocessing workflow implemented in this sprint therefore starts by validating the local dataset structure, confirming that all metadata rows have matching images and masks and that the spatial dimensions are consistent across files. The seven original classes are preserved in the metadata for analysis, but the modeling target is converted to the binary setting adopted by the project: melanoma versus non-melanoma. Since the original class distribution is still imbalanced, all melanoma images are kept while only the negative class is downsampled, preserving the non-melanoma subclass mix as much as possible. This creates an effective dataset that is more suitable for training without discarding the positive class.
+---
 
-Once the effective dataset is defined, the preprocessing stage applies a deterministic lesion-centric pipeline. For each sample, the RGB image and its binary segmentation mask are loaded, thin hair artifacts are attenuated with a classical black-hat morphological operation followed by inpainting, the lesion region is localized using the mask, and a crop is extracted around the lesion with a safety margin. The cropped image is then padded to a square format and resized to a fixed resolution of `224 x 224` pixels. This procedure standardizes the inputs while preserving the lesion as the central visual structure, which is more appropriate than a naive global resize of the full dermoscopic frame.
+## 13. Reproducibility
 
-After preprocessing, the effective dataset is split into training, validation, and test subsets using a reproducible `70% / 15% / 15%` stratified partition based on the binary label. Train-only normalization statistics are then computed from the processed images in order to avoid information leakage from validation or test sets. To further mitigate the imbalance problem during model training, the pipeline also includes a weighted sampling strategy in which melanoma receives higher importance and melanocytic nevi are given additional emphasis as hard negatives, since they remain the most visually relevant contrast group.
+A new contributor can bring up the project end-to-end with the following sequence, fully documented in the repository's `README.md`:
 
-Another important outcome of this sprint was the creation of two training-ready branches for the next experiments. The first branch uses only deterministic preprocessing and serves as the baseline condition. In this branch, the effective dataset contains 4,452 images, of which 1,113 are melanoma and 3,339 are non-melanoma. After the `70% / 15% / 15%` stratified split, the training set contains 779 melanoma images and 2,337 non-melanoma images, while validation and test each contain 167 melanoma and 501 non-melanoma images. The second branch uses the same preprocessing but adds controlled offline augmentation in the training split, including flips, rotations, mild geometric transformations, and brightness or contrast perturbations. Since two additional augmented copies are generated for each training image while the original samples are kept, the augmented training set grows to 9,348 images, with 2,337 melanoma samples and 7,011 non-melanoma samples. In other words, augmentation substantially increases the volume of the training data, although it preserves the same class ratio of 3:1 already defined in the effective dataset.
+1. Clone the repository.
+2. `pip install -r requirements.txt` (or use the provided `Dockerfile` for a sealed environment).
+3. `dvc pull` to fetch the dataset and model checkpoints from the S3 remote.
+4. `dvc repro` to rebuild the preprocessing, training and evaluation pipeline.
+5. `uvicorn api.main:app` to run the local FastAPI service, or `streamlit run app.py` to run the demo UI.
 
-### Sprint 3 – Modeling
+The repository ships four scoped `requirements*.txt` files (base, API-only, CI, Lambda) so that each environment installs only what it actually needs, and a `Dockerfile` plus `Dockerfile.lambda` for hermetic builds.
 
-The third sprint marked the transition from data preparation to the initial modeling phase, focusing on establishing a functional training pipeline and conducting the first experimental runs. At this stage, the primary objective was not to finalize model selection, but to validate the end-to-end workflow and ensure that the data processing and training components were correctly integrated.
+---
 
-To improve the clarity and modularity of the pipeline, preprocessing and data augmentation were reorganized into two distinct stages. Preprocessing remained a deterministic step, responsible for lesion-centered image preparation, including cropping, resizing, and normalization. In contrast, data augmentation was isolated as a separate component aimed at increasing variability in the training data. This structural separation improved code maintainability and enabled clearer comparisons between different experimental configurations.
+## 14. Authors and Contributions
 
-Following this reorganization, two modeling approaches were implemented. The first corresponds to a custom model developed by the project team, representing the primary experimental direction. The second model was adapted from an existing Kaggle implementation and used as a practical baseline for comparison. The goal of training both models at this stage was to verify that the pipeline could successfully support multiple architectures and to obtain preliminary performance signals, rather than to conduct a definitive comparative evaluation.
+Both authors contributed across all stages of the project through extensive pair programming, and every commit on the final branch credits both authors via Git `Co-authored-by` trailers.
 
-Initial training runs were successfully executed for both models, confirming that the pipeline is operational: datasets are correctly prepared and loaded, models can be trained without errors, and performance metrics can be monitored throughout the training process. These early results provided important validation that the overall workflow is functioning as intended. However, they should be interpreted as exploratory, as limitations in the current setup were identified during experimentation.
+**Gabriel Fernando Missaka Mendes** led the data exploration phase, the design of the preprocessing pipeline, the clinical interpretation of the threshold strategy (`T_LOW` / `T_HIGH`), the structure of the project repository and documentation, and the final report and video deliverables.
 
-Based on discussions and feedback, two main issues were recognized. The first relates to the augmentation strategy. At this stage, data augmentation is applied offline, meaning that augmented images are generated prior to training and stored as fixed samples in the dataset. While this approach increases the dataset size, it limits variability during training, as the same augmented versions are repeatedly presented to the model. This reduces the potential benefits of augmentation compared to an online approach, where transformations are applied dynamically at each training iteration. As a result, migrating augmentation to an online, on-the-fly strategy was identified as a priority for the next sprint.
+**Eduardo Takei Yaginuma** led the modeling experimentation across architectures and image resolutions, the implementation of the MLflow tracking and Model Registry integration, the construction of the AWS deployment pipeline (Docker image, ECR, Lambda, API Gateway), the two Infrastructure-as-Code implementations (CloudFormation and Terraform), and the drift-detection and retrain-trigger components.
 
-The second issue concerns computational efficiency. Training time in the current environment proved to be a significant bottleneck, limiting the number of experiments that can be conducted and slowing down iteration cycles. This constraint is particularly critical at this stage of the project, where multiple architectures, hyperparameters, and training strategies must be explored. To address this limitation, it was decided that the next sprint will include the use of more powerful computational resources, specifically through the allocation of AWS instances, to enable faster and more scalable experimentation.
+---
 
-In summary, Sprint 3 successfully established the initial modeling pipeline and validated the feasibility of the experimental setup. At the same time, it revealed two key limitations, augmentation strategy and computational capacity, that must be addressed to support more robust experimentation. These insights define the main objectives for Sprint 4, which will focus on implementing online data augmentation and improving the training infrastructure to enable more efficient and reliable model development.
+## 15. Conclusion
 
-### Sprint 4 - Validation and Optimization
+The delivered project covers all C-level requirements of the rubric and all five B-level items:
 
-The fourth sprint focused on converting the initial modeling pipeline into a controlled benchmark for validation and optimization. Using the treated image manifest produced in preprocessing, we preserved a single stratified `train / validation / test` split across all experiments to ensure fair comparison. The balanced training set contained 779 melanoma and 2,337 non-melanoma images, while validation and test each contained 167 melanoma cases and more than 1,300 non-melanoma cases. This design allowed the models to be compared under identical data conditions while maintaining a clinically realistic evaluation set.
+- **Experiment tracking framework** — MLflow with Model Registry and conditional alias promotion.
+- **Automated deployment pipeline** — `deploy_lambda.sh` automating Docker build, ECR push, and Lambda create/update; the endpoint is currently live.
+- **Infrastructure as Code** — both a CloudFormation template and a Terraform module, fully parameterized and equivalent.
+- **Production monitoring** — KS and Chi-squared drift detection executed on a weekly CI schedule, with JSON summary and visual artifacts.
+- **Degradation handling** — automatic retrain trigger via `dvc repro --force`, logged for auditability.
 
-One of the main technical changes in this sprint was the migration from offline augmentation to online augmentation. Instead of training on fixed augmented copies, the pipeline now applies random transformations dynamically during training, including horizontal and vertical flips, `RandomRotate90`, small geometric perturbations, and mild brightness and contrast variation. This directly addressed the limitation identified in Sprint 3 by increasing effective variability at each epoch without artificially freezing the augmented samples.
+The project demonstrates that a non-trivial deep-learning model for medical-image triage can be operationalized with the same engineering discipline as any other production system: every piece of state is versioned, every action is reproducible, every deployment is automated, and every output is observable.
 
-Class imbalance was addressed at the data level by downsampling non-melanoma cases to a 3:1 ratio relative to melanoma. The training loop further uses a weighted sampler to give additional emphasis to melanocytic nevi (`NV`) as hard negatives. Because the dataset was already explicitly balanced through downsampling, we removed the `pos_weight` argument from `BCEWithLogitsLoss`, which had previously produced a double correction of the imbalance and was distorting the calibration of output probabilities.
-
-Another important change was the threshold selection criterion. The sensitivity target for selecting `T_HIGH` was adjusted from `0.95` to `0.85`, producing a more conservative and better-calibrated threshold. Previous experiments with a `0.95` target caused some models, particularly `EfficientNet-B0` at `64×64`, to collapse to near-zero thresholds due to the aggressiveness of the recall requirement. The revised target maintained clinical relevance while producing more stable and interpretable threshold values across all eight configurations.
-
-To evaluate the eight experiments (two architectures × four configurations), we trained both `EfficientNet-B0` and `ResNet50` with `BCEWithLogitsLoss`, `AdamW` optimizer, cosine annealing scheduler, and early stopping based on validation AUC. In addition to standard binary classification metrics, we implemented a dual-threshold three-zone system. A lower threshold, `T_LOW`, was defined as the `2%` quantile of melanoma probabilities on the validation set, producing three clinically interpretable zones: `Non-Melanoma`, `Possible Melanoma`, and `Melanoma`. This allowed the analysis to quantify how safely low-confidence predictions could be automatically dismissed, and how much clinical review burden the uncertain zone would impose in practice.
-
-The benchmark results confirmed a consistent advantage for `ResNet50` over `EfficientNet-B0`, especially at `224×224` resolution with online augmentation. The best model according to the composite clinical score was `ResNet50 | aug_224x224`, which achieved a test AUC of `0.9128`.
-
-| Model | Experiment | AUC | Mel. captured | Mel. hidden | Uncertain zone | Clinical score |
-|-------|-----------|-----|--------------|------------|----------------|----------------|
-| ResNet50 | aug_224x224 | 0.9128 | 85.63% | 2.99% | 22.62% | 0.45617 |
-| ResNet50 | base_224x224 | 0.8901 | 87.43% | 4.79% | 16.50% | 0.45583 |
-| EfficientNet-B0 | aug_224x224 | 0.9035 | 83.83% | 5.39% | 17.23% | 0.44066 |
-| ResNet50 | base_64x64 | 0.8703 | 82.04% | 1.80% | 27.21% | 0.43790 |
-| EfficientNet-B0 | base_64x64 | 0.7773 | 86.83% | 2.99% | 28.61% | 0.43765 |
-| ResNet50 | aug_64x64 | 0.8677 | 82.63% | 3.59% | 19.36% | 0.43664 |
-| EfficientNet-B0 | base_224x224 | 0.8897 | 82.63% | 4.19% | 22.02% | 0.43620 |
-| EfficientNet-B0 | aug_64x64 | 0.7577 | 82.63% | 2.99% | 25.08% | 0.41968 |
-
-The detailed three-zone breakdown for the two highlighted models on the test set is shown below. `ResNet50 | aug_224x224` ranks first by composite clinical score (best AUC and highest melanoma capture rate), while `ResNet50 | base_64x64` ranks fourth overall but presents the lowest automatic-dismissal risk, hiding only `1.80%` of melanomas in the Non-Melanoma zone.
-
-**ResNet50 | aug_224x224** — AUC 0.9128, T_LOW = 0.1451, T_HIGH = 0.4432
-
-| Zone | Total | % total | True mel. | % of mels | Mel. rate |
-|------|-------|---------|-----------|-----------|-----------|
-| Non-Melanoma | 781 | 51.96% | 5 | 2.99% | 0.64% |
-| Possible Melanoma | 340 | 22.62% | 19 | 11.38% | 5.59% |
-| Melanoma | 382 | 25.42% | 143 | 85.63% | 37.43% |
-| **TOTAL** | **1503** | **100%** | **167** | **100%** | — |
-
-**ResNet50 | base_64x64** — AUC 0.8703, T_LOW = 0.0798, T_HIGH = 0.3839
-
-| Zone | Total | % total | True mel. | % of mels | Mel. rate |
-|------|-------|---------|-----------|-----------|-----------|
-| Non-Melanoma | 588 | 39.12% | 3 | 1.80% | 0.51% |
-| Possible Melanoma | 409 | 27.21% | 27 | 16.17% | 6.60% |
-| Melanoma | 506 | 33.67% | 137 | 82.04% | 27.08% |
-| **TOTAL** | **1503** | **100%** | **167** | **100%** | — |
-
-The two configurations represent different risk profiles. `ResNet50 | aug_224x224` offers stronger overall discrimination (AUC +4.25 pp) and captures more melanomas with high confidence (`85.63%` vs `82.04%`), but at the cost of a larger uncertain zone (`22.62%` vs `27.21%`). `ResNet50 | base_64x64` keeps the automatic-dismissal risk lower (`1.80%` vs `2.99%`, a difference of approximately two cases on the test set), which may be preferred in settings where any missed melanoma carries higher operational weight than the volume of cases referred for clinical review.
-
-The broader comparison across all eight experiments also confirmed that `EfficientNet-B0` at `64×64` continues to show near-degenerate threshold values (`T_HIGH < 0.002`), indicating that this architecture at low resolution does not achieve sufficient class separation under the current training setup. The `224×224` configurations consistently produced higher AUC and better threshold calibration across both architectures.
-
-In summary, Sprint 4 established the final validation protocol of the project and identified `ResNet50 | aug_224x224` as the strongest configuration. The next steps involve refining the threshold strategy to reduce the size of the uncertain zone without compromising the safety of the automatic dismissal zone, and finalizing the model for integration into the deployment pipeline.
+---
 
 ## References
 
 1. AMERICAN CANCER SOCIETY. *Cancer Facts & Figures 2024*. Atlanta: American Cancer Society, 2024.
 2. CARAVIELLO, Camila et al. *Melanoma Skin Cancer: A Comprehensive Review of Current Knowledge*. *Cancers*, Basel, v. 17, n. 2920, p. 1–35, 2025.
 3. VIEIRA, Larissa Silva Fontaine; BRANDÃO, Byron José Figueiredo. *Diagnosis and prevention of melanoma: a systematic review*. *BWS Journal*, [s. l.], v. 5, e220900160, p. 1–10, Sept. 2022.
-4. Kaggle dataset: [Skin Cancer Lesions Segmentation](https://www.kaggle.com/datasets/volodymyrpivoshenko/skin-cancer-lesions-segmentation/code)
+4. TSCHANDL, Philipp; ROSENDAHL, Cliff; KITTLER, Harald. *The HAM10000 dataset, a large collection of multi-source dermatoscopic images of common pigmented skin lesions*. *Scientific Data*, v. 5, n. 180161, 2018.
