@@ -20,7 +20,7 @@ This project takes an existing binary-classification model (melanoma vs. non-mel
 
 The project uses the **HAM10000** dataset (Human Against Machine with 10,000 training images) from the ISIC archive, comprising **10,015 dermatoscopic images** annotated across seven diagnostic classes (`MEL`, `NV`, `BCC`, `AKIEC`, `BKL`, `DF`, `VASC`), together with binary segmentation masks for each lesion.
 
-The raw dataset (`data/images/`, `data/masks/`, `data/metadata.csv`) and the precomputed train/val/test splits (`data/metadata/*_split.csv`) are tracked locally with `.dvc` pointer files. Heavy binary content lives in an S3 remote configured via `.dvc/config`; this allows any contributor to reproduce the data state with a single `dvc pull`, without bloating Git history with multi-gigabyte assets.
+The heavy assets (`data/images/`, `data/masks/`, `data/metadata.csv`) are tracked with DVC pointer files and live in an S3 remote configured via `.dvc/config`; this allows any contributor to reproduce the data state with a single `dvc pull`, without bloating Git history with multi-gigabyte binaries. The train / validation / test split CSVs under `data/metadata/` are small enough to commit directly to Git.
 
 ### 2.2 Preprocessing Pipeline
 
@@ -178,17 +178,7 @@ The repository ships four scoped `requirements*.txt` files (base, API-only, CI, 
 
 ---
 
-## 14. Authors and Contributions
-
-Both authors contributed across all stages of the project through extensive pair programming, and every commit on the final branch credits both authors via Git `Co-authored-by` trailers.
-
-**Gabriel Fernando Missaka Mendes** led the data exploration phase, the design of the preprocessing pipeline, the clinical interpretation of the threshold strategy (`T_LOW` / `T_HIGH`), the structure of the project repository and documentation, and the final report and video deliverables.
-
-**Eduardo Takei Yaginuma** led the modeling experimentation across architectures and image resolutions, the implementation of the MLflow tracking and Model Registry integration, the construction of the AWS deployment pipeline (Docker image, ECR, Lambda, API Gateway), the two Infrastructure-as-Code implementations (CloudFormation and Terraform), and the drift-detection and retrain-trigger components.
-
----
-
-## 15. Conclusion
+## 14. Conclusion
 
 The delivered project covers all C-level requirements of the rubric and all five B-level items:
 
