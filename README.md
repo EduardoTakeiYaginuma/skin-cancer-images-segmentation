@@ -3,6 +3,12 @@
 **Authors:** Gabriel Fernando Missaka Mendes | Eduardo Takei Yaginuma  
 **Course:** Artificial Intelligence in Medicine and Healthcare
 
+## Project Video
+
+A 3-5 minute video explaining the project, the dataset and the main MLOps decisions:
+
+🎥 **[Watch the video](TODO-add-video-link-here)**
+
 ## Project Overview
 
 Binary classification of dermatoscopic images: melanoma (`1`) versus non-melanoma (`0`).
