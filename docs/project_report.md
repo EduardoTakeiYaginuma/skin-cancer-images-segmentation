@@ -1,7 +1,7 @@
-# MLOps Final Project Report — Binary Melanoma Screening
+# MLOps Final Project Report: Binary Melanoma Screening
 
 **Authors:** Gabriel Fernando Missaka Mendes | Eduardo Takei Yaginuma
-**Course:** MLOps — Insper (26.1)
+**Course:** MLOps at Insper (26.1)
 **Repository:** [`insper-classroom/26-1-mlops-project-gabriel-e-edu`](https://github.com/insper-classroom/26-1-mlops-project-gabriel-e-edu)
 
 ---
@@ -26,9 +26,9 @@ The raw dataset (`data/images/`, `data/masks/`, `data/metadata.csv`) and the pre
 
 The preprocessing pipeline is declared in `dvc.yaml` as a three-stage DAG:
 
-- **`preprocess`** — runs `notebooks/03_preprocessing.ipynb` converted to a script. It performs (i) mask-guided cropping centered on the lesion, (ii) per-channel normalization using statistics computed once and persisted to `notebooks/outputs/preprocessing/normalization_stats.json`, (iii) resizing to `224×224` for the classifier and `64×64` for the segmentation model, and (iv) emits a `treated_manifest.csv` describing each exported sample.
-- **`train`** — runs `train.py` using the treated manifest, the normalization stats and the splits as DVC dependencies. Output: a tracked MLflow run with the trained checkpoint.
-- **`evaluate`** — runs `evaluate.py` against the held-out test split and writes `metrics.json` as a DVC-tracked metric file.
+- **`preprocess`**: runs `notebooks/03_preprocessing.ipynb` converted to a script. It performs (i) mask-guided cropping centered on the lesion, (ii) per-channel normalization using statistics computed once and persisted to `notebooks/outputs/preprocessing/normalization_stats.json`, (iii) resizing to `224×224` for the classifier and `64×64` for the segmentation model, and (iv) emits a `treated_manifest.csv` describing each exported sample.
+- **`train`**: runs `train.py` using the treated manifest, the normalization stats and the splits as DVC dependencies. Output: a tracked MLflow run with the trained checkpoint.
+- **`evaluate`**: runs `evaluate.py` against the held-out test split and writes `metrics.json` as a DVC-tracked metric file.
 
 Because every stage declares its `deps`, `outs` and (where relevant) `params`, the pipeline is fully reproducible: changing a preprocessing parameter in `params.yaml` invalidates only the downstream stages, and `dvc repro` can run the minimum required work.
 
@@ -66,7 +66,7 @@ The operational stack is composed of seven layers, each addressing one or more r
 
 ---
 
-## 5. Experiment Tracking — MLflow
+## 5. Experiment Tracking: MLflow
 
 All training runs are tracked with MLflow. The tracking URI and experiment name are centralized in `mlflow_config.py`; the URI defaults to a local SQLite backend and can be overridden via the `MLFLOW_TRACKING_URI` environment variable to point at a managed tracking server.
 
@@ -88,8 +88,8 @@ The project satisfies the data-versioning rubric requirement **twice**, delibera
 
 A complementary feature store is implemented under `feature_store/feature_repo/`. Two feature views materialize information per `image_id`:
 
-- **`lesion_classification`** — the 7-way one-hot encoding plus the binary label and the split identifier, sourced from the train/val/test split CSVs.
-- **`preprocessing_stats`** — per-image final dimensions, mask coverage after cropping, and hair-pixel count, sourced from the preprocessing manifest.
+- **`lesion_classification`**: the 7-way one-hot encoding plus the binary label and the split identifier, sourced from the train/val/test split CSVs.
+- **`preprocessing_stats`**: per-image final dimensions, mask coverage after cropping, and hair-pixel count, sourced from the preprocessing manifest.
 
 The registry uses SQLite, the online store is SQLite, and the offline store is a file provider. A `melanoma_serving_features` feature service exposes only the preprocessing stats for online retrieval, while `melanoma_training_features` exposes the full set for offline training. Scripts under `feature_store/scripts/` cover the full lifecycle: `prepare_sources.py` converts the project CSVs to Parquet, `apply_registry.py` runs `feast apply`, `get_historical_features.py` retrieves the training set, and `materialize_online.py` warms the online store.
 
@@ -115,8 +115,8 @@ In parallel, a local **FastAPI** service (`api/main.py`) provides `/health` and 
 
 Infrastructure is described declaratively in **two equivalent IaC implementations**, both maintained under `infra/`:
 
-- **`infra/cloudformation.yaml`** — AWS CloudFormation template that provisions the Lambda function (image package, IAM role, S3 read access, configurable memory and timeout), the HTTP API Gateway v2 instance, the `AWS_PROXY` integration, the `POST /predict` route, the `prod` stage and the resource-based permission allowing API Gateway to invoke the Lambda.
-- **`infra/terraform/`** — a Terraform module (`main.tf`, `variables.tf`, `outputs.tf`) provisioning the same set of resources via the `hashicorp/aws` provider, validated with `terraform validate`.
+- **`infra/cloudformation.yaml`**: AWS CloudFormation template that provisions the Lambda function (image package, IAM role, S3 read access, configurable memory and timeout), the HTTP API Gateway v2 instance, the `AWS_PROXY` integration, the `POST /predict` route, the `prod` stage and the resource-based permission allowing API Gateway to invoke the Lambda.
+- **`infra/terraform/`**: a Terraform module (`main.tf`, `variables.tf`, `outputs.tf`) provisioning the same set of resources via the `hashicorp/aws` provider, validated with `terraform validate`.
 
 Both implementations are fully parameterized (region, ECR image URI, Lambda role ARN, model S3 bucket, memory size, timeout), so the entire production environment can be stood up or torn down with a single command.
 
@@ -134,10 +134,10 @@ The same logger is reused across the FastAPI service (`api/main.py`), the Lambda
 
 The repository ships a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on every push and pull request, and additionally on a weekly cron schedule. The workflow contains four jobs:
 
-- **`lint`** — runs `ruff check .` against the entire codebase.
-- **`test`** — installs PyTorch CPU wheels and the project's CI requirements, then runs `pytest tests/ -v`. The suite covers FastAPI endpoint contracts (with a mocked predictor), the preprocessing utility functions, and the Feast Parquet schema. Current status: 17 tests collected, 15 passing, 2 skipped (the skipped tests require artifacts generated by the preprocessing notebook).
-- **`docker-build`** — verifies that the production Dockerfile builds without errors on a clean Ubuntu runner.
-- **`monitoring`** — scheduled job (cron `0 9 * * 1`, i.e., every Monday at 09:00) that runs the drift detection report and uploads the artifacts so degradation is visible without manual intervention.
+- **`lint`**: runs `ruff check .` against the entire codebase.
+- **`test`**: installs PyTorch CPU wheels and the project's CI requirements, then runs `pytest tests/ -v`. The suite covers FastAPI endpoint contracts (with a mocked predictor), the preprocessing utility functions, and the Feast Parquet schema. Current status: 17 tests collected, 15 passing, 2 skipped (the skipped tests require artifacts generated by the preprocessing notebook).
+- **`docker-build`**: verifies that the production Dockerfile builds without errors on a clean Ubuntu runner.
+- **`monitoring`**: scheduled job (cron `0 9 * * 1`, i.e., every Monday at 09:00) that runs the drift detection report and uploads the artifacts so degradation is visible without manual intervention.
 
 The same workflow runs on both the working repository and the Insper Classroom repository. All recent pushes have completed green.
 
@@ -147,7 +147,7 @@ The same workflow runs on both the working repository and the Insper Classroom r
 
 Once a model is live, drift is the operational risk that matters most. `monitoring/drift_detector.py` compares a reference distribution (typically taken from the training period) against a current distribution (taken from recent production predictions) using two complementary statistical tests:
 
-- **Kolmogorov–Smirnov** on continuous features (e.g. the predicted melanoma probability), to detect a shift in the full predictive distribution. The KS test is non-parametric and sensitive to both location and shape changes.
+- **Kolmogorov-Smirnov** on continuous features (e.g. the predicted melanoma probability), to detect a shift in the full predictive distribution. The KS test is non-parametric and sensitive to both location and shape changes.
 - **Chi-squared** on categorical features (e.g. the assigned triage zone with categories `negative` / `review` / `positive`), to detect distributional shifts in the discrete output buckets that the downstream clinical workflow depends on.
 
 Both tests use a significance level of 0.05. For each evaluated feature, the detector writes a `drift_summary.json` containing the test statistic, p-value, drift flag, alpha, and (for the categorical case) the full reference and current contingency tables. The detector additionally renders two PNG visualizations (histogram for the continuous feature, bar plot for the categorical feature) so that the report is both machine- and human-readable.
@@ -160,7 +160,7 @@ The monitoring entry point (`monitoring/run_monitoring.py`) supports both real p
 
 When the drift detector flags one or more features, `monitoring/retrain_trigger.py` is responsible for the response. Its logic is intentionally minimal: read the drift summary, determine the set of drifted features, and (i) write a structured JSON-Lines entry to `monitoring/retrain_log.jsonl` for audit purposes and (ii) invoke `dvc repro --force` to rebuild the data and training pipelines from scratch using the current data state.
 
-The trigger supports a `--dry-run` flag so that the monitoring job can run in observation mode in CI without consuming compute, and a live flag to perform the actual retraining when desired. The full chain — *drift detected → log → DVC repro → MLflow registered → conditional production promotion* — closes the operational loop without manual intervention.
+The trigger supports a `--dry-run` flag so that the monitoring job can run in observation mode in CI without consuming compute, and a live flag to perform the actual retraining when desired. The full chain (*drift detected → log → DVC repro → MLflow registered → conditional production promotion*) closes the operational loop without manual intervention.
 
 ---
 
@@ -192,11 +192,11 @@ Both authors contributed across all stages of the project through extensive pair
 
 The delivered project covers all C-level requirements of the rubric and all five B-level items:
 
-- **Experiment tracking framework** — MLflow with Model Registry and conditional alias promotion.
-- **Automated deployment pipeline** — `deploy_lambda.sh` automating Docker build, ECR push, and Lambda create/update; the endpoint is currently live.
-- **Infrastructure as Code** — both a CloudFormation template and a Terraform module, fully parameterized and equivalent.
-- **Production monitoring** — KS and Chi-squared drift detection executed on a weekly CI schedule, with JSON summary and visual artifacts.
-- **Degradation handling** — automatic retrain trigger via `dvc repro --force`, logged for auditability.
+- **Experiment tracking framework**: MLflow with Model Registry and conditional alias promotion.
+- **Automated deployment pipeline**: `deploy_lambda.sh` automating Docker build, ECR push, and Lambda create/update; the endpoint is currently live.
+- **Infrastructure as Code**: both a CloudFormation template and a Terraform module, fully parameterized and equivalent.
+- **Production monitoring**: KS and Chi-squared drift detection executed on a weekly CI schedule, with JSON summary and visual artifacts.
+- **Degradation handling**: automatic retrain trigger via `dvc repro --force`, logged for auditability.
 
 The project demonstrates that a non-trivial deep-learning model for medical-image triage can be operationalized with the same engineering discipline as any other production system: every piece of state is versioned, every action is reproducible, every deployment is automated, and every output is observable.
 
@@ -205,6 +205,6 @@ The project demonstrates that a non-trivial deep-learning model for medical-imag
 ## References
 
 1. AMERICAN CANCER SOCIETY. *Cancer Facts & Figures 2024*. Atlanta: American Cancer Society, 2024.
-2. CARAVIELLO, Camila et al. *Melanoma Skin Cancer: A Comprehensive Review of Current Knowledge*. *Cancers*, Basel, v. 17, n. 2920, p. 1–35, 2025.
-3. VIEIRA, Larissa Silva Fontaine; BRANDÃO, Byron José Figueiredo. *Diagnosis and prevention of melanoma: a systematic review*. *BWS Journal*, [s. l.], v. 5, e220900160, p. 1–10, Sept. 2022.
+2. CARAVIELLO, Camila et al. *Melanoma Skin Cancer: A Comprehensive Review of Current Knowledge*. *Cancers*, Basel, v. 17, n. 2920, p. 1-35, 2025.
+3. VIEIRA, Larissa Silva Fontaine; BRANDÃO, Byron José Figueiredo. *Diagnosis and prevention of melanoma: a systematic review*. *BWS Journal*, [s. l.], v. 5, e220900160, p. 1-10, Sept. 2022.
 4. TSCHANDL, Philipp; ROSENDAHL, Cliff; KITTLER, Harald. *The HAM10000 dataset, a large collection of multi-source dermatoscopic images of common pigmented skin lesions*. *Scientific Data*, v. 5, n. 180161, 2018.
