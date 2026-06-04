@@ -5,7 +5,7 @@
 
 ## Project Video
 
-A 3-5 minute video explaining the project, the dataset and the main MLOps decisions:
+A video explaining the project, the dataset and the main MLOps decisions:
 
 🎥 **[Watch the video](https://youtu.be/8oEMfKIOY3Q)**
 
